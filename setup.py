@@ -1,0 +1,17 @@
+from setuptools import setup, find_packages
+
+setup(
+    name='nalulib',
+    version='0.1',
+    packages=find_packages(),
+    entry_points={
+        'console_scripts': [
+            'exo-info=nalulib.cli:exo_info',
+            'exo-flatten=nalulib.cli:exo_flatten',
+            'exo-zextrude=nalulib.cli:exo_zextrude',
+            'exo-rotate=nalulib.cli:exo_rotate',
+            'exo-layers=nalulib.cli:exo_layers',
+            'nalu-restart=nalulib.cli:nalu_restart',
+        ],
+    },
+)

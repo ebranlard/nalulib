@@ -1,0 +1,10 @@
+*.egg-info
+
+*.exo
+exodusii
+_*
+*.msh
+
+code
+data
+example
