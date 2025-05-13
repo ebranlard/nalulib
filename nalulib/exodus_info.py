@@ -27,8 +27,10 @@ def explore_exodus_file(filename, n=5, nss=10):
         print(f"Number of Time Steps    : {len(times)}")
         if len(times) > 1:
             print(f"Times                   : [{times[0]:.5f}, {times[1]:.5f}, ..., {times[-1]:.5f}] (n={len(times)})")
-        else:
+        elif len(times) > 0:
             print(f"Times                   : [{times[0]:.5f}, ..., {times[-1]:.5f}] (n={len(times)})")
+        else:
+            print(f"Times                   : ", times)
         glob_var = exo.get_global_variable_names()
         elem_var = exo.get_element_variable_names()
         node_var = exo.get_node_variable_names()
