@@ -3,9 +3,10 @@ import os
 import ruamel.yaml
 import numpy as np
 from io import StringIO
-from exodusii.file import ExodusIIFile
-from welib.essentials import *
 import glob
+# Local
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
 
 class RuamelYamlEditor:
     def __init__(self, filepath):
@@ -63,6 +64,9 @@ def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, de
 
     dt = ti['time_step']
     nt_max = ti['termination_step_count']
+    if verbose:
+        myprint('dt',dt)
+        myprint('nt_max',nt_max)
 
 
     # --- Infer iRestart
@@ -252,12 +256,12 @@ def nalu_restart():
     parser = argparse.ArgumentParser(description="Prepare Nalu-Wind restart YAML and batch file.")
     parser.add_argument("yaml_file", default='input.yaml', nargs="?", help="Input YAML file")
     parser.add_argument("--it", type=int, default=None, help="Restart integer time step (optional, inferred from restart if not given)")
-    parser.add_argument("--output_file", default=None, help="Output YAML file (optional, default: input_runNRUN.yaml)")
-    parser.add_argument("--batch_file", default=None, help="Batch file template (optional)")
+    parser.add_argument("-o", "--output_file", default=None, help="Output YAML file (optional, default: input_runNRUN.yaml)")
+    parser.add_argument("-b", "--batch_file", default=None, help="Batch file template (optional)")
     parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel"], help="Cluster type")
     parser.add_argument("-n", "--nrun", type=int, default=None, help="Run index for output naming (optional, inferred from output filename)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args() 
     if args.verbose:
         print('Arguments:', args)

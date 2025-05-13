@@ -1,9 +1,10 @@
-from exodusii.file import ExodusIIFile
 import numpy as np
 import sys
 import os
-from welib.tools.clean_exceptions import *
-from welib.essentials import Timer
+import re
+# Local
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
 
 # Define the faces of a HEX8 element
 HEX_FACES = [
@@ -23,7 +24,12 @@ QUAD_SIDES = [
 
 SIDE_SETS_EXCLUDE=['front', 'back','wing-pp']
 
-def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0, verbose=True, airfoil2wing=True, ss_wing_pp=True, profiler=False):
+
+def extract_n(s):
+    match = re.search(r'_n(\d+)', s)
+    return int(match.group(1)) if match else None
+
+def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0, verbose=True, airfoil2wing=True, ss_wing_pp=True, profiler=False, ss_suffix=None):
     """
     Extrude a 2D QUAD mesh into a 3D HEX mesh along the z direction.
 
@@ -34,8 +40,19 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
         zSpan (float): Total span in the z direction.
         verbose (bool): If True, print detailed information during processing.
     """
+    # --- Default output file - We replace _n1 with _nNSPAN if possible
     if output_file is None:
-        output_file = os.path.splitext(input_file)[0] + "_nSpan={}.exo".format(nSpan)
+        base_dir = os.path.dirname(input_file)
+        base_name = os.path.basename(input_file)
+        base, ext = os.path.splitext(base_name)
+        n = extract_n(base)
+        if n is not None:
+            base = base.replace('_n'+str(n), '_n'+str(nSpan))
+        else:
+            base +='_n'+str(nSpan)
+        output_file = os.path.join(base_dir, base+ext)
+        if os.path.basename(output_file) == os.path.basename(input_file):
+            raise Exception()
 
     print('Opening Exodus file      :', input_file)
     with ExodusIIFile(input_file, mode="r") as exo:
@@ -51,6 +68,7 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
         block_info = exo.get_element_block(block_id)
         if block_info.elem_type not in ["QUAD"]:
             raise ValueError(f"Unsupported element type: {block_info.elem_type}. Only QUAD is supported.")
+        block_name_in = block_info.name
 
         # Read element connectivity
         quad_conn = np.array(exo.get_element_conn(block_id))  # Convert to NumPy array for slicing
@@ -67,6 +85,20 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
                 "name": exo.get_side_set_name(side_set_id),
             }
             side_set_names.append(str(side_set.name))
+
+    # --- Infer potential ss_suffix
+    if ss_suffix is None:
+        suffix=[]
+        for name in side_set_names: 
+            suffix.append(name.split('_')[-1])
+        usuffix = np.unique(suffix)
+        if len(usuffix)==1:
+            ss_suffix = '_'+usuffix[0]
+            print(f"[INFO] Side set suffix inferred as: {ss_suffix}.  If this is undesired, use --ss_suffix ''")
+        else:
+            ss_suffix=''
+    else:
+        ss_suffix=''
 
     # --- Extrude the mesh
     with Timer('Extruding mesh', silent=not profiler, writeBefore=True):
@@ -121,6 +153,10 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
             if airfoil2wing:
                 if side_set_data["name"] == "airfoil":
                     side_set_data["name"] = "wing"
+            # Add suffix
+            if not side_set_data["name"].endswith(ss_suffix):
+                side_set_data["name"] += ss_suffix
+
 
             # Extrude side sets
             elements = side_set_data["elements"]
@@ -151,7 +187,10 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
                 "name": side_set_data["name"],
             }
 
-        if ss_wing_pp:
+        tmp_side_set_names = [str(v['name']) for v in new_side_sets.values()]
+        if ss_wing_pp and ('wing' in tmp_side_set_names):
+            if verbose:
+                print('Adding wing_pp side set.')
             # Add the "wing_pp" side set
             new_side_sets[len(new_side_sets) + 1] = {
                 "elements": wing_pp_elements,
@@ -178,12 +217,12 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
         new_side_sets[len(new_side_sets) + 1] = {
             "elements": back_elements,
             "sides": back_sides,
-            "name": "back",
+            "name": "back"+ss_suffix,
         }
         new_side_sets[len(new_side_sets) + 1] = {
             "elements": front_elements,
             "sides": front_sides,
-            "name": "front",
+            "name": "front"+ss_suffix,
         }
 
 
@@ -199,9 +238,16 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
             print(f"  Sides   : {side_set_data['sides'][:5]} (len={len(side_set_data['sides'])}, nUnique={len(np.unique(side_set_data['sides']))})")
 
     # Check that no side set is empty
+    delete_keys=[]
     for side_set_id, side_set_data in new_side_sets.items():
         if len(side_set_data["elements"]) == 0:
-            raise ValueError(f"Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion.")
+            if side_set_data['name'].lower().startswith('wing-pp'):
+                print(f'[WARN] Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-ss_wing_pp. Deleting this side set.')
+                delete_keys.append(side_set_id)
+            else:
+                raise ValueError(f"Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-")
+    for key in delete_keys:
+        del new_side_sets[key]
 
     # --- Write the extruded mesh to a new Exodus file
     with Timer('Writing file', silent=not profiler):
@@ -224,7 +270,11 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=1.0, zoffset=0.0,
             # Write element block
             exo_out.put_element_block(0, "HEX8", len(hex_conn), 8)
             exo_out.put_element_conn(0, hex_conn)
-            exo_out.put_element_block_names(["fluid-hex"])
+            block_name ='fluid-hex'
+            if block_name_in is not None:
+                if block_name_in.lower().endswith('-quad'):
+                    block_name= block_name_in.replace('-quad','-hex').replace('-QUAD','-hex')
+            exo_out.put_element_block_names([block_name])
 
             # Write side sets
             for side_set_id, side_set_data in new_side_sets.items():
@@ -245,11 +295,12 @@ def exo_quads2hex():
     parser.add_argument("input_file", type=str, help="Path to the input Exodus file containing the 2D QUAD mesh.")
     parser.add_argument("-o",'--output_file', metavar='output_file', type=str, default=None, help="Path to the output Exodus file. Defaults to '<input_file>_nSpan=N.exo'.")
     parser.add_argument("-n", metavar='nSpan', type=int, default=10, help="Number of layers in the z direction (nSpan-1 cells). Default is 10.")
-    parser.add_argument("-z", metavar='zSpan', type=float, default=1.0, help="Total span in the z direction. Default is 1.0.")
+    parser.add_argument("-z", metavar='zSpan', type=float, default=4.0, help="Total span in the z direction. Default is 1.0.")
     parser.add_argument("--zoffset", type=float, default=0.0, help="Offset in the z direction. Default is 0.0.")
-    parser.add_argument("--verbose", default=False, action="store_true", help="Enable verbose output.")
+    parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Enable verbose output.")
     parser.add_argument("--no-airfoil2wing", default=False, action="store_true", help="Do not rename 'airfoil' side set to 'wing'.")
     parser.add_argument("--no-ss_wing_pp", default=False, action="store_true", help="Do not split the 'wing' side set into 'wing' and 'wing_pp'.")
+    parser.add_argument("--ss_suffix", default=None, help="Side set suffix (e.g. '_bg')")
     parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
 
     args = parser.parse_args()
@@ -264,6 +315,7 @@ def exo_quads2hex():
             verbose=args.verbose,
             airfoil2wing=not args.no_airfoil2wing,
             ss_wing_pp=not args.no_ss_wing_pp,
+            ss_suffix=args.ss_suffix,
             profiler = args.profiler
         )
 

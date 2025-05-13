@@ -1,10 +1,9 @@
 import numpy as np
 import sys
 import os
-# 
-from exodusii.file import ExodusIIFile
-from welib.tools.clean_exceptions import *
-from welib.essentials import Timer
+# Local
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
 
 # Define the faces of a HEX8 element
 HEX_FACES = [
@@ -22,7 +21,7 @@ QUAD_SIDES = [
     [2, 3],
     [3, 0]]
 
-SIDE_SETS_EXCLUDE=['front', 'back','wing-pp', 'wing_pp']
+SIDE_SETS_EXCLUDE=['front', 'back','wing-pp', 'wing_pp', 'front_bg', 'back_bg']
 
 
 
@@ -212,7 +211,7 @@ def reindex_quads(quads, old_node_coords, side_sets, z_ref, verbose=False, profi
 
 
 
-def write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=True, z_ref=None, profiler=False):
+def write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=True, z_ref=None, profiler=False, block_name_in=None):
     with Timer('Writing file', silent=not profiler, writeBefore=True):
         with ExodusIIFile(output_file, mode="w") as exo_out:
             exo_out.put_init(
@@ -234,7 +233,11 @@ def write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=True
             exo_out.put_element_block(0, "QUAD", len(quads), 4)
             quad_connectivity = np.array([[node_id for node_id in quad['node_ids']] for quad in quads])
             exo_out.put_element_conn(0, quad_connectivity)
-            exo_out.put_element_block_names(["fluid-quad"])
+            block_name = 'fluid-quad'
+            if block_name_in is not None:
+                if block_name_in.lower().endswith('-hex'):
+                    block_name= block_name_in.replace('-hex','-quad').replace('-HEX','-quad')
+            exo_out.put_element_block_names([block_name])
 
             # Write side sets
             for side_set_id, side_set_data in side_sets.items():
@@ -254,18 +257,22 @@ def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, p
         verbose (bool): If True, print detailed information during processing.
     """
     if output_file is None:
-        output_file = os.path.splitext(input_file)[0] + "_quads.exo"
+        #output_file = os.path.splitext(input_file)[0] + "_quads.exo"
+        output_file = os.path.splitext(input_file)[0] + "_n1.exo"
 
     print( 'Opening Exodus file      :', input_file)
     # Read exodus and extrad quads at z_ref
     with ExodusIIFile(input_file, mode="r") as exo:
         quads, side_sets, node_coords, z_ref = exo_hex_to_quads(exo, z_ref=z_ref, verbose=verbose, profiler=profiler)
+        block_id = exo.get_element_block_ids()[0]
+        block_info = exo.get_element_block(block_id)
+        block_name_in = block_info.name
 
     # Reindex
     quads, nodes_coords, side_sets = reindex_quads(quads, node_coords, side_sets, z_ref, verbose=verbose, profiler=profiler)
 
     # Write to file
-    write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=verbose, z_ref=z_ref, profiler=profiler)
+    write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=verbose, z_ref=z_ref, profiler=profiler, block_name_in=block_name_in)
     print(f"Written Exodus file      : {output_file}")
     return output_file
 
@@ -281,7 +288,7 @@ def exo_hex2quads():
                         help="Path to the output Exodus file. Defaults to '<input_file>_quads.exo'.")
     parser.add_argument("-z", metavar="Z_ref", type=float, default=None,
                         help="Reference Z value for the plane. If None, the Z value of the first node is used.")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
     parser.add_argument("--profiler", action="store_true", help="Enable profiler timing .")
 
     args = parser.parse_args()

@@ -2,11 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
-# 
-from welib.essentials import Timer
-from exodusii.file import ExodusIIFile
+# Local
 from nalulib.exodus_hex2quads import hex_to_quads_plane  # Import the function to convert HEX to QUADS
 from nalulib.meshlib import create_quadrilateral_cells, save_mesh, open_mesh_in_gmsh
+from nalulib.exodusii.file import ExodusIIFile
+from nalulib.essentials import *
 
 # Define the faces of a HEX8 element
 HEX_FACES = [

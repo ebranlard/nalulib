@@ -2,9 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 import os
-from exodusii.file import ExodusIIFile
-from welib.tools.clean_exceptions import *
-from welib.essentials import Timer
+import re
+# Local
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
+
 
 HEX_FACES = [
     [1, 5, 4, 0],  # 1 
@@ -20,6 +22,19 @@ QUAD_SIDES = [
     [1, 2],
     [2, 3],
     [3, 0]]
+
+    #s = s.lower()
+
+def extract_aoa(s):
+    match = re.search(r'_aoa(-?\d+)', s, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+def replace_aoa(s, new_value):
+    if re.search(r'_aoa-?\d+', s, re.IGNORECASE):
+        return re.sub(r'_aoa-?\d+', f'_aoa{new_value}', s, flags=re.IGNORECASE)
+    else:
+        return s + f'_aoa{new_value}'
+
 
 def rotate_coordinates(coords, angle, center):
     """
@@ -356,6 +371,23 @@ def rotate_exodus(input_file, output_file, angle, center, angle_center, inlet_st
             )
 
     # Write rotated mesh to a new Exodus file
+
+    if output_file is None:
+        base_dir = os.path.dirname(input_file)       # '/home/user/data'
+        base_name = os.path.basename(input_file)     # 'file_n10.exo'
+        base, ext = os.path.splitext(base_name)  # name: 'file_n10', ext: '.exo'
+        aoa = extract_aoa(base)
+        print('>>> Old AoA: ', aoa)
+        if aoa is None:
+            base += '_rot'+int(angle)
+        else:
+            aoa_new = int(aoa + angle)
+            print('>>> New AoA: ', aoa_new)
+            base = replace_aoa(base, aoa_new)
+
+        output_file = os.path.join(base_dir, base+ext)
+        print('>>> outputfile', output_file )
+
     with Timer("Writing rotated Exodus file", silent=not profiler):
         with ExodusIIFile(output_file, mode="w") as exo_out:
             exo_out.put_init(
@@ -409,8 +441,6 @@ def exo_rotate():
 
     args = parser.parse_args()
 
-    if args.output_file is None:
-        args.output_file = os.path.splitext(args.input_file)[0] + "_rot{}.exo".format(int(args.angle))
 
     # Determine angle center
     angle_center = tuple(args.angle_center) if args.angle_center else tuple(args.center)

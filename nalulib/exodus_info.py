@@ -1,5 +1,7 @@
-from exodusii.file import ExodusIIFile
 import numpy as np
+# Local
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
 
 def explore_exodus_file(filename, n=5, nss=10):
     print(f"Filename:                 {filename}")
