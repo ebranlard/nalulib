@@ -74,7 +74,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     for alpha, nalu_file, mesh_file in zip(aseq, nalu_files, mesh_files):
         sAOA = '_aoa{:.1f}'.format(alpha)
         # --- Change mesh
-        mesh_rel = os.path.relpath(mesh_files[0], os.path.dirname(nalu_file))
+        mesh_rel = os.path.relpath(mesh_file, os.path.dirname(nalu_file))
         realm['mesh'] = mesh_rel.replace('\\','/')
 
         # --- Change output filenames.
