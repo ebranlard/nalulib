@@ -20,13 +20,15 @@ def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, ver
         lines = f.readlines()
     # look for the line nalu_input=XXX and replace it with nalu_input=nalu_input_file
     for i, line in enumerate(lines):
-        if 'nalu_input' in line:
+        if jobname is not None:
+            # Check if line contains the string "--job_name" anywher
+            if '--job-name' in line:
+                # Replace the line with the new job name
+                lines[i] = "#SBATCH --job-name={}\n".format(jobname)
+        if line.startswith('nalu_input'):
             nalu_input_file = nalu_input_file.replace('./','').replace('.\\','')
             lines[i] = "nalu_input={}".format(nalu_input_file)+'\n'
             break
-        if jobname is not None:
-            if '--job_name' in line:
-                lines[i] = "#SBATCH --job-name={}\n".format(jobname)
     # Write the new batch file in the current directory, based on the output_filename
     base_dir = os.path.dirname(nalu_input_file)
     base_name = os.path.basename(nalu_input_file)

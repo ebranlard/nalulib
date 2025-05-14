@@ -109,9 +109,9 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
 
     # --- Create BATCH files
     for alpha, nalu_file  in zip(aseq, nalu_files):
-        jobname += 'A{:.1f}'.format(alpha)
-        new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname)
-        myprint('Written Batch File', new_batch)
+        jobname_case = jobname + 'A{:.1f}'.format(alpha)
+        new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case)
+        myprint('Written Batch File', new_batch, jobname_case)
 
 
 
@@ -235,7 +235,7 @@ def nalu_aseq():
 #    parser.add_argument("-o", "--output_file", default=None, help="Output YAML file (optional, default: input_runNRUN.yaml)")
     parser.add_argument("-a", type=float, nargs=3, default=None, help="Alpha sequence (start, stop, step) (optional, default: -15 to 15 in steps of 3)")
     parser.add_argument("-b", "--batch_file", default=None, help="Batch file template (optional)")
-    parser.add_argument("-j", "--jobname", default=None, help="Jobname prefix (optional)")
+    parser.add_argument("-j", "--jobname", default='', help="Jobname prefix (optional)")
     parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel"], help="Cluster type")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args() 
