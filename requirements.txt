@@ -1,3 +1,5 @@
+numpy
+matplotlib
 meshio
 netcdf4
 backtrace

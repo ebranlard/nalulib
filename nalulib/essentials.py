@@ -1,5 +1,30 @@
 import numpy as np
 import time
+import re
+
+# --------------------------------------------------------------------------------}
+# --- Misc tools
+# --------------------------------------------------------------------------------{
+
+def extract_aoa(s):
+    match = re.search(r'_aoa(-?\d+)', s, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+def replace_aoa(s, new_value):
+    if re.search(r'_aoa-?\d+', s, re.IGNORECASE):
+        return re.sub(r'_aoa-?\d+', f'_aoa{new_value}', s, flags=re.IGNORECASE)
+    else:
+        return s + f'_aoa{new_value}'
+
+
+def myprint(s1, s2, s3=None):
+    if s3 is None:
+        print('{:30s}: '.format(s1) + '{:20s}'.format(str(s2)))
+    else:
+        print('{:30s}: '.format(s1) + '{:20s}'.format(str(s2))+' -> '+'{:20s}'.format(str(s3)) )
+
+
+
 
 
 # --------------------------------------------------------------------------------}
@@ -31,8 +56,6 @@ backtrace.hook(
 # --------------------------------------------------------------------------------}
 # --- tic toc 
 # --------------------------------------------------------------------------------{
-
-
 def pretty_time(t):
     # fPrettyTime: returns a 6-characters string corresponding to the input time in seconds.
     #   fPrettyTime(612)=='10m12s'

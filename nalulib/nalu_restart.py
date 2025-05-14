@@ -1,47 +1,13 @@
 import re
 import os
-import ruamel.yaml
 import numpy as np
-from io import StringIO
 import glob
 # Local
 from nalulib.essentials import *
 from nalulib.exodusii.file import ExodusIIFile
-
-class RuamelYamlEditor:
-    def __init__(self, filepath):
-        self.filepath = filepath
-        self.yaml = ruamel.yaml.YAML()
-        self.yaml.preserve_quotes = True
-        with open(filepath, 'r', encoding='utf-8') as f:
-            f.seek(0)
-            self.data = self.yaml.load(f)
-
-    @property
-    def lines(self):
-        buf = StringIO()
-        self.yaml.dump(self.data, buf)
-        return buf.getvalue().splitlines(keepends=True)
-
-    def save(self, outpath=None):
-        with open(outpath or self.filepath, 'w', encoding='utf-8') as f:
-            f.writelines(self.lines)
-
-    def print(self, context=True, line=True):
-        for i, l in enumerate(self.lines):
-            c = ""
-            if line:
-                l = "{:50s}".format(l.rstrip())
-            else:
-                l = ""
-            if context:
-                c = '# ' + str(self.get_context(i))
-            print(f"{i}: {l} {c}")
-
-def exo_get_times(filename):
-    with ExodusIIFile(filename, mode="r") as exo:
-        times = exo.get_times()
-    return times
+from nalulib.nalu_input import NALUInputFile
+from nalulib.nalu_batch import nalu_batch
+from nalulib.exodus import exo_get_times
 
 def myprint(s1, s2, s3=None):
     if s3 is None:
@@ -52,7 +18,7 @@ def myprint(s1, s2, s3=None):
 def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, debug=False, nt_max_tol=10, nrun=None, batch_file=None, cluster='unity'):
     myprint('Input YAML file', yaml_file)
 
-    yml = RuamelYamlEditor(yaml_file)
+    yml = NALUInputFile(yaml_file)
     #    start_time: 0
     #    termination_step_count: 3760
     #    time_step: 0.000266667
@@ -217,33 +183,14 @@ def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, de
             base = '_'.join(sp[:-1])
         output_file = base + '_run{}.yaml'.format(nrun)
     yml.save(output_file)
-    myprint('Written              ', output_file)
+    myprint('Written YAML File    ', output_file)
 
 
 
     # --- Create batch file
     print('--- Creating batch file')
-    if batch_file is None:
-        if cluster == 'unity':
-            batch_file = os.path.dirname(__file__) + '/_template_submit-unity.sh'
-        elif cluster == 'kestrel':
-            batch_file = os.path.dirname(__file__) + '/_template_submit-kestrel.sh'
-        else:
-            raise Exception('Unknown cluster {}'.format(cluster))
-    myprint('Using batch_file', batch_file)
-    with open(batch_file, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-    # look for the line nalu_input=XXX and replace it with nalu_input=output_file
-    for i, line in enumerate(lines):
-        if 'nalu_input' in line:
-            output_file = output_file.replace('./','').replace('.\\','')
-            lines[i] = "nalu_input={}".format(output_file)+'\n'
-            break
-    # Write the new batch file in the current directory, based on the output_filename
-    new_batch = os.path.splitext(output_file)[0] + '.sh'
-    with open(new_batch, 'w', encoding='utf-8') as f:
-        f.writelines(lines)
-    myprint('Written              ', new_batch)
+    new_batch = nalu_batch(batch_file, output_file, cluster=cluster, verbose=verbose, jobname=None)
+    myprint('Written Batch File   ', new_batch)
 
 
 

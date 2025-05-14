@@ -12,6 +12,7 @@ setup(
             'exo-rotate=nalulib.cli:exo_rotate',
             'exo-layers=nalulib.cli:exo_layers',
             'nalu-restart=nalulib.cli:nalu_restart',
+            'nalu-aseq=nalulib.cli:nalu_aseq',
         ],
     },
 )

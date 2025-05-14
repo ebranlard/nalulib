@@ -23,18 +23,6 @@ QUAD_SIDES = [
     [2, 3],
     [3, 0]]
 
-    #s = s.lower()
-
-def extract_aoa(s):
-    match = re.search(r'_aoa(-?\d+)', s, re.IGNORECASE)
-    return int(match.group(1)) if match else None
-
-def replace_aoa(s, new_value):
-    if re.search(r'_aoa-?\d+', s, re.IGNORECASE):
-        return re.sub(r'_aoa-?\d+', f'_aoa{new_value}', s, flags=re.IGNORECASE)
-    else:
-        return s + f'_aoa{new_value}'
-
 
 def rotate_coordinates(coords, angle, center):
     """
@@ -297,7 +285,7 @@ def find_inlet_outlet_segments(side_sets, node_coords, center, elem_to_face_node
 
     return inlet_start, inlet_span, outlet_start, outlet_span
 
-def rotate_exodus(input_file, output_file, angle, center, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, keep_io_side_set, verbose, profiler=False):
+def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, outlet_span=None, keep_io_side_set=False, verbose=False, profiler=False):
     """
     Rotate an Exodus file's node coordinates and adjust side sets.
 
@@ -315,9 +303,14 @@ def rotate_exodus(input_file, output_file, angle, center, angle_center, inlet_st
         verbose (bool): Enable verbose output.
         profiler (bool): Enable profiling with timers.
     """
-    angle_rad = np.radians(angle)
+
+    # --- Default arguments
+    # Determine angle center
+    angle_center = tuple(angle_center) if angle_center else tuple(center)
 
 
+
+    # --- Open the baseline exodus file and precompute necessary data
     with Timer("Opening Exodus file", silent=not profiler):
         print(f"Opening Exodus file: {input_file}")
         with ExodusIIFile(input_file, mode="r") as exo:
@@ -348,79 +341,89 @@ def rotate_exodus(input_file, output_file, angle, center, angle_center, inlet_st
     # Find inlet and outlet angular segments (before rotation)
     if inlet_start is None or inlet_span is None or outlet_start is None or outlet_span is None:
         with Timer("Finding inlet and outlet angular segments", silent=not profiler):
-            inlet_start, inlet_span, outlet_start, outlet_span = find_inlet_outlet_segments(
-                side_sets, node_coords, angle_center, elem_to_face_nodes, verbose=verbose
-            )
+            inlet_start, inlet_span, outlet_start, outlet_span = find_inlet_outlet_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, verbose=verbose)
+    
+    if hasattr(angle, '__len__'):
+        angles = angle
+        if len(output_file) != len(angles):
+            raise ValueError("Output file list must match the number of angles.")
+        output_files = output_file
+    else:
+        angles = [angle]
+        output_files = [output_file]
 
-    # Rotate node coordinates
-    with Timer("Rotating node coordinates", silent=not profiler):
+    # --- Loop on different angles
+    for i, (angle, output_file) in enumerate(zip(angles, output_files)):
         if verbose:
-            print('Rotating about center:', center, 'by angle:', angle)
-        rotated_coords = rotate_coordinates(node_coords, angle_rad, center)
+            print(f"Rotating by {angle} degrees (output file: {output_file})")
 
-    # Adjust side sets if needed
-    if not keep_io_side_set:
-        if verbose:
-            print(f"Angle center       : {angle_center}")
-            print(f"Angle span, inlet  : Start={np.degrees(inlet_start):5.1f}°, Span={np.degrees(inlet_span):5.1f}° (anticlockwise)")
-            print(f"Angle span, outlet : Start={np.degrees(outlet_start):5.1f}°, Span={np.degrees(outlet_span):5.1f}° (anticlockwise)")
+        # Rotate node coordinates
+        with Timer("Rotating node coordinates", silent=not profiler):
+            if verbose:
+                print('Rotating about center:', center, 'by angle:', angle)
+            rotated_coords = rotate_coordinates(node_coords, np.radians(angle), center)
 
-        with Timer("Adjusting side sets", silent=not profiler):
-            side_sets = adjust_side_sets(
-                side_sets, rotated_coords, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, elem_to_face_nodes
-            )
+        # Adjust side sets if needed
+        if not keep_io_side_set:
+            if verbose:
+                print(f"Angle center       : {angle_center}")
+                print(f"Angle span, inlet  : Start={np.degrees(inlet_start):5.1f}°, Span={np.degrees(inlet_span):5.1f}° (anticlockwise)")
+                print(f"Angle span, outlet : Start={np.degrees(outlet_start):5.1f}°, Span={np.degrees(outlet_span):5.1f}° (anticlockwise)")
 
-    # Write rotated mesh to a new Exodus file
+            with Timer("Adjusting side sets", silent=not profiler):
+                side_sets = adjust_side_sets(side_sets, rotated_coords, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, elem_to_face_nodes)
 
-    if output_file is None:
-        base_dir = os.path.dirname(input_file)       # '/home/user/data'
-        base_name = os.path.basename(input_file)     # 'file_n10.exo'
-        base, ext = os.path.splitext(base_name)  # name: 'file_n10', ext: '.exo'
-        aoa = extract_aoa(base)
-        print('>>> Old AoA: ', aoa)
-        if aoa is None:
-            base += '_rot'+int(angle)
-        else:
-            aoa_new = int(aoa + angle)
-            print('>>> New AoA: ', aoa_new)
-            base = replace_aoa(base, aoa_new)
+        # Write rotated mesh to a new Exodus file
 
-        output_file = os.path.join(base_dir, base+ext)
-        print('>>> outputfile', output_file )
-
-    with Timer("Writing rotated Exodus file", silent=not profiler):
-        with ExodusIIFile(output_file, mode="w") as exo_out:
-            exo_out.put_init(
-                title=f"Rotated Mesh by {angle}°",
-                num_dim=num_dim,
-                num_nodes=len(rotated_coords),
-                num_elem=exo.num_elems(),
-                num_elem_blk=exo.num_elem_blk(),
-                num_node_sets=exo.num_node_sets(),
-                num_side_sets=len(side_sets),
-                double=True
-            )
-            if num_dim == 2:
-                exo_out.put_coord(rotated_coords[:, 0], rotated_coords[:, 1])
-                exo_out.put_coord_names(["X", "Y"])
+        if output_file is None:
+            base_dir = os.path.dirname(input_file)
+            base_name = os.path.basename(input_file)
+            base, ext = os.path.splitext(base_name)
+            aoa = extract_aoa(base)
+            print('>>> Old AoA: ', aoa)
+            if aoa is None:
+                base += '_rot'+int(angle)
             else:
-                exo_out.put_coord(rotated_coords[:, 0], rotated_coords[:, 1], rotated_coords[:, 2])
-                exo_out.put_coord_names(["X", "Y", "Z"])
+                aoa_new = int(aoa + angle)
+                print('>>> New AoA: ', aoa_new)
+                base = replace_aoa(base, aoa_new)
 
-            # Write element blocks
-            for blk_id in exo.get_element_block_ids():
-                blk_info = exo.get_element_block(blk_id)
-                exo_out.put_element_block(blk_id, blk_info.elem_type, blk_info.num_block_elems, blk_info.num_elem_nodes)
-                exo_out.put_element_conn(blk_id, exo.get_element_conn(blk_id))
-                name = exo.get_element_block_name(blk_id)
-                exo_out.put_element_block_name(blk_id, name)
+            output_file = os.path.join(base_dir, base+ext)
+            print('>>> outputfile', output_file )
 
-            # Write side sets
-            for side_set_id, side_set_data in side_sets.items():
-                exo_out.put_side_set_param(side_set_id, len(side_set_data["elements"]))
-                exo_out.put_side_set_sides(side_set_id, side_set_data["elements"], side_set_data["sides"])
-                exo_out.put_side_set_name(side_set_id, side_set_data["name"])
-    print(f"Written Exodus file: {output_file}")
+        with Timer("Writing rotated Exodus file", silent=not profiler):
+            with ExodusIIFile(output_file, mode="w") as exo_out:
+                exo_out.put_init(
+                    title=f"Rotated Mesh by {angle}°",
+                    num_dim=num_dim,
+                    num_nodes=len(rotated_coords),
+                    num_elem=exo.num_elems(),
+                    num_elem_blk=exo.num_elem_blk(),
+                    num_node_sets=exo.num_node_sets(),
+                    num_side_sets=len(side_sets),
+                    double=True
+                )
+                if num_dim == 2:
+                    exo_out.put_coord(rotated_coords[:, 0], rotated_coords[:, 1])
+                    exo_out.put_coord_names(["X", "Y"])
+                else:
+                    exo_out.put_coord(rotated_coords[:, 0], rotated_coords[:, 1], rotated_coords[:, 2])
+                    exo_out.put_coord_names(["X", "Y", "Z"])
+
+                # Write element blocks
+                for blk_id in exo.get_element_block_ids():
+                    blk_info = exo.get_element_block(blk_id)
+                    exo_out.put_element_block(blk_id, blk_info.elem_type, blk_info.num_block_elems, blk_info.num_elem_nodes)
+                    exo_out.put_element_conn(blk_id, exo.get_element_conn(blk_id))
+                    name = exo.get_element_block_name(blk_id)
+                    exo_out.put_element_block_name(blk_id, name)
+
+                # Write side sets
+                for side_set_id, side_set_data in side_sets.items():
+                    exo_out.put_side_set_param(side_set_id, len(side_set_data["elements"]))
+                    exo_out.put_side_set_sides(side_set_id, side_set_data["elements"], side_set_data["sides"])
+                    exo_out.put_side_set_name(side_set_id, side_set_data["name"])
+        print(f"Written Exodus file: {output_file}")
 
 def exo_rotate():
     """
@@ -442,8 +445,6 @@ def exo_rotate():
     args = parser.parse_args()
 
 
-    # Determine angle center
-    angle_center = tuple(args.angle_center) if args.angle_center else tuple(args.center)
 
     # Determine inlet and outlet angles
     if args.bc_angles_half:
@@ -467,7 +468,7 @@ def exo_rotate():
         output_file=args.output_file,
         angle=args.angle,
         center=tuple(args.center),
-        angle_center=angle_center,
+        angle_center=args.angle_center,
         inlet_start=inlet_start,
         inlet_span=inlet_span,
         outlet_start=outlet_start,
