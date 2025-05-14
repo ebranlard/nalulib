@@ -110,7 +110,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     # --- Create BATCH files
     for alpha, nalu_file  in zip(aseq, nalu_files):
         jobname += 'A{:.1f}'.format(alpha)
-        new_batch = nalu_batch(batch_file=None, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname)
+        new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname)
         myprint('Written Batch File', new_batch)
 
 

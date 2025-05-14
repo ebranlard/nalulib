@@ -3,20 +3,20 @@ import os
 from nalulib.essentials import myprint
 
 
-def nalu_batch(batch_file, nalu_input_file, cluster=None, verbose=False, jobname=None):
+def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False, jobname=None):
     """ """
-    if batch_file is None:
+    if batch_file_template is None:
         if cluster == 'unity':
-            batch_file = os.path.dirname(__file__) + '/_template_submit-unity.sh'
+            batch_file_template = os.path.dirname(__file__) + '/_template_submit-unity.sh'
         elif cluster == 'kestrel':
-            batch_file = os.path.dirname(__file__) + '/_template_submit-kestrel.sh'
+            batch_file_template = os.path.dirname(__file__) + '/_template_submit-kestrel.sh'
         else:
             raise Exception('Unknown cluster {}'.format(cluster))
 
     if verbose:
-        myprint('Using batch_file', batch_file)
+        myprint('Using batch_file', batch_file_template)
 
-    with open(batch_file, 'r', encoding='utf-8') as f:
+    with open(batch_file_template, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     # look for the line nalu_input=XXX and replace it with nalu_input=nalu_input_file
     for i, line in enumerate(lines):
