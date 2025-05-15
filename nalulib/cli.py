@@ -11,3 +11,6 @@ from nalulib.exodus import exo_rotate
 
 from nalulib.nalu_restart import nalu_restart
 from nalulib.nalu_aseq import nalu_aseq
+
+# 
+from nalulib.gmesh_gmesh2exodus import gmesh2exo

@@ -1,8 +1,9 @@
 import meshio
+
 import os
 import numpy as np
-from welib.essentials import *  # DO NOT REMOVE THIS LINE
-from exodusii.file import ExodusIIFile
+from nalulib.essentials import *
+from nalulib.exodusii.file import ExodusIIFile
 
 # Define the faces of a HEX8 element
 #hex_faces_old = [
@@ -31,9 +32,9 @@ hex_faces = [
 ]
 
 
-def gmsh2exo(filein, fileout=None, verbose=False):
+def gmesh_to_exo(filein, fileout=None, verbose=False):
     """
-    Convert a GMSH mesh file to Exodus II format.
+    Convert a 3D GMSH mesh file to Exodus II format.
     
     Parameters:
         filein (str): Input GMSH file name.
@@ -243,6 +244,22 @@ def gmsh2exo(filein, fileout=None, verbose=False):
                 exo.put_side_set_name(side_set_id, surface_name)
 
     print(f"\nExodus II file '{fileout}' created successfully.")
+
+
+def gmesh2exo():
+    """
+    Command-line interface to convert a 3D GMSH mesh file to Exodus II format.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="Convert a 3D gmesh file to Exodus II format")
+    parser.add_argument("input_file", type=str, help="Path to the gmesh file.")
+    parser.add_argument("-o", "--output_file", type=str, default=None, help="Path to the output Exodus file. Defaults to '<input_file>.exo'.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
+
+    args = parser.parse_args()
+
+    gmesh_to_exo(args.input_file, args.output_file, verbose=args.verbose)
+
 
 if __name__ == "__main__":
     import sys

@@ -13,6 +13,7 @@ setup(
             'exo-layers=nalulib.cli:exo_layers',
             'nalu-restart=nalulib.cli:nalu_restart',
             'nalu-aseq=nalulib.cli:nalu_aseq',
+            'gmesh2exo=nalulib.cli:gmesh2exo',
         ],
     },
 )

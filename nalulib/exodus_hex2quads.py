@@ -301,6 +301,8 @@ def exo_hex2quads():
             verbose=args.verbose,
             profiler=args.profiler
         )
+
+# Rename function
 exo_flatten = exo_hex2quads
 
 if __name__ == "__main__":
