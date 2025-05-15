@@ -1,0 +1,310 @@
+# Adapted from Shreyas email
+# hypre 
+# solve_mom, solve_scalar, solve_elliptic
+# sst_iddes
+velocity_value: &vel [75.000000, 0.000000, 0.000000]
+epsilon: &epsilon 919.3455
+tke: &tke 0.0010422
+air_density: &air_density 1.2
+air_viscosity: &air_viscosity 9.0e-06
+
+restart_freq: &irestart 500
+
+Simulations:
+- name: sim1
+  optimizer: opt1
+  time_integrator: ti_1
+
+Time_Integrators:
+- StandardTimeIntegrator:
+    name: ti_1
+    realms:
+    - airfoil
+    second_order_accuracy: true
+    start_time: 0
+    termination_step_count: 16000
+    time_step: 0.000266667
+    time_step_count: 0
+    time_stepping_type: fixed
+
+
+# --- Linear solvers
+linear_solvers:
+# solve_mom
+- dump_hypre_matrix_stats: false
+  hypre_cfg_file: ./hypre_file.yaml
+  hypre_cfg_node: hypre_simple_precon
+  kspace: 1000
+  max_iterations: 1000
+  method: hypre_gmres
+  name: solve_mom
+  output_level: 0
+  preconditioner: boomerAMG
+  recompute_preconditioner_frequency: 1
+  reuse_linear_system: true
+  segregated_solver: true
+  simple_hypre_matrix_assemble: true
+  sync_alg: 1
+  tolerance: 1e-5
+  type: hypre
+  write_matrix_files: false
+# solve_scalar  
+- dump_hypre_matrix_stats: false
+  hypre_cfg_file: ./hypre_file.yaml
+  hypre_cfg_node: hypre_simple_precon
+  kspace: 1000
+  max_iterations: 1000
+  method: hypre_gmres
+  name: solve_scalar
+  output_level: 0
+  preconditioner: boomerAMG
+  recompute_preconditioner_frequency: 1
+  reuse_linear_system: true
+  simple_hypre_matrix_assemble: true
+  sync_alg: 1
+  tolerance: 1e-5
+  type: hypre
+  write_matrix_files: false
+# solve_elliptic
+- dump_hypre_matrix_stats: false
+  hypre_cfg_file: ./hypre_file.yaml
+  hypre_cfg_node: hypre_elliptic
+  kspace: 1000
+  max_iterations: 1000
+  method: hypre_gmres
+  name: solve_elliptic
+  output_level: 0
+  preconditioner: boomerAMG
+  recompute_preconditioner_frequency: 1
+  reuse_linear_system: true
+  simple_hypre_matrix_assemble: true
+  sync_alg: 1
+  tolerance: 1e-5
+  type: hypre
+  write_matrix_files: false
+
+# --- Realms
+realms:
+
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# --- AIRFOIL REALM  
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+- name: airfoil
+
+# Mesh - airfoil
+  rebalance_mesh: true
+  stk_rebalance_method: parmetis
+  automatic_decomposition_type: rcb
+  mesh: diamond_n120.exo
+
+# Initial conditions - airfoil
+  initial_conditions:
+  - constant: ic_1
+    target_name: fluid-hex
+    value:
+      pressure: 0
+      specific_dissipation_rate: *epsilon
+      turbulent_ke: *tke
+      velocity: *vel
+
+# Boundary conditions - airfoil
+  boundary_conditions:
+  - wall_boundary_condition: bc_wing
+    target_name: wing
+    wall_user_data:
+      turbulent_ke: 0.0
+      use_wall_function: false
+      velocity: [0,0,0]
+
+  - wall_boundary_condition: bc_wing_pp
+    target_name: wing-pp
+    wall_user_data:
+      turbulent_ke: 0.0
+      use_wall_function: false
+      velocity: [0,0,0]
+
+  - inflow_boundary_condition: bc_inflow
+    target_name: inlet
+    inflow_user_data:
+      specific_dissipation_rate: *epsilon
+      turbulent_ke: *tke
+      velocity: *vel
+
+  - open_boundary_condition: bc_open
+    target_name: outlet
+    open_user_data:
+      pressure: 0.0
+      specific_dissipation_rate: *epsilon
+      turbulent_ke: *tke
+      velocity: [0,0,0]
+    
+    
+  - periodic_boundary_condition: bc_front_back_wing
+    target_name: [front, back]
+    periodic_user_data:
+      search_tolerance: 0.0001
+      
+  check_for_missing_bcs: true
+  check_jacobians: true
+
+# System - airfoil
+  equation_systems:
+    name: theEqSys
+    max_iterations: 2
+    solver_system_specification:
+      ndtw: solve_elliptic
+      pressure: solve_elliptic
+      specific_dissipation_rate: solve_scalar
+      turbulent_ke: solve_scalar
+      velocity: solve_mom
+    systems:
+    - WallDistance:
+        convergence_tolerance: 1.0e-08
+        max_iterations: 1
+        name: myNDTW
+    - LowMachEOM:
+        convergence_tolerance: 1.0e-08
+        max_iterations: 1
+        name: myLowMach
+    - ShearStressTransport:
+        convergence_tolerance: 1.0e-08
+        max_iterations: 1
+        name: mySST
+
+# Solution options - airfoil  
+  solution_options:
+    name: myOptions
+    turbulence_model: sst_iddes
+    options:
+    - hybrid_factor:
+        specific_dissipation_rate: 1.0
+        turbulent_ke: 1.0
+        velocity: 1.0
+    - alpha_upw:
+        specific_dissipation_rate: 1.0
+        turbulent_ke: 1.0
+        velocity: 1.0
+    - upw_factor:
+        specific_dissipation_rate: 0.0
+        turbulent_ke: 0.0
+        velocity: 1.0
+    - limiter:
+        pressure: true
+        specific_dissipation_rate: true
+        turbulent_ke: true
+        velocity: true
+    - noc_correction:
+        pressure: true
+    - projected_nodal_gradient:
+        ndtw: element
+        pressure: element
+        specific_dissipation_rate: element
+        turbulent_ke: element
+        velocity: element
+    - relaxation_factor:
+        pressure: 0.3
+        specific_dissipation_rate: 0.7
+        turbulent_ke: 0.7
+        velocity: 0.7
+    - turbulence_model_constants:
+        SDRWallFactor: 0.625
+    projected_timescale_type: momentum_diag_inv
+
+
+# Turbulence averaging - airfoil
+  turbulence_averaging:
+    specifications:
+    - compute_q_criterion: true
+      compute_reynolds_stress: true
+      compute_tke: true
+      compute_vorticity: true
+      name: one
+      target_name:
+      - fluid-hex
+    time_filter_interval: 100000.0
+  use_edges: true
+
+# Material - airfoil
+  material_properties:
+    specifications:
+    - name: density
+      type: constant
+      value: *air_density
+    - name: viscosity
+      type: constant
+      value: *air_viscosity
+    target_name: fluid-hex
+
+# Outputs - airfoil
+#   output:
+#     output_data_base_name: results/output.e
+#     output_frequency: 100
+#     output_node_set: false
+#     output_variables:
+#     - velocity
+    #    - density
+#     - pressure
+    #    - pressure_force
+    #    - viscous_force
+    #    - tau_wall_vector
+    #    - tau_wall
+#     - turbulent_ke
+    #    - specific_dissipation_rate
+    #    - minimum_distance_to_wall
+    #    - sst_f_one_blending
+    #    - turbulent_viscosity
+    #    - element_courant
+    #    - q_criterion
+#     - vorticity
+    #    - assembled_area_force_moment
+#      - reynolds_stress
+#     - dpdx
+#     - mesh_displacement
+#     - iblank
+#     - iblank_cell
+
+# Post Processing - airfoil
+  post_processing:
+  - type: surface
+    frequency: 1
+    output_file_name: _forces.csv
+    parameters: [0,0]
+    physics: surface_force_and_moment
+    target_name:
+    - wing
+    - wing-pp
+  #- type: surface  
+  #  frequency: 1
+  #  output_file_name: _forces_pp.csv
+  #  parameters: [0,0]
+  #  physics: surface_force_and_moment
+  #  target_name:
+  #  - wing-pp
+
+# Restart - airfoil
+  restart:
+    restart_data_base_name: restart/output.exo
+    restart_frequency: *irestart 
+
+# 
+#  sideset_writers:
+  #- name: boundary_output
+  #  output_data_base_name: sideset/result.exo
+#    output_frequency: 500
+  #  output_variables:
+  #  - pressure
+  #  - pressure_force
+  #  - viscous_force
+  #  - tau_wall
+  #  target_name:
+  #  - wing
+  #  - wing-pp

@@ -5,6 +5,8 @@ Small tools to work with airfoils in nalu-wind and 2D/3D airfoil meshes.
 ## Installation
 
 ```bash
+git clone https://github.com/ebranlard/nalulib
+cd nalulib
 pip install -e .
 ```
 
@@ -21,15 +23,16 @@ After performing the pip install, the following tools should be accessible from 
  - `gmesh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
 
 
-Typical usages:
+Typical usage (minimal runnable example):
 ```bash
+cd examples
 gmesh2exo -h # Display help
-gmesh2exo grid_n24.msh # Create exo file from gmesh
-exo-info grid_n24.exo  # Show info
-exo-flatten grid_n24.exo -o grid_n1.exo  # Create 2D mesh (quads) from 3D mesh (hexs)
-exo-zextrude grid_n1.exo -z 4 -n120 -o grid_n120.exo  # Create 3D mesh from 2D mesh
-exo-rotate grid_n120.exo -a 30 -o grid_n120_aoa30.exo # Rotate mesh by 30 deg
-nalu-aseq input.yaml -a -30 30 5 -j polar -b submit.sh # Create mesh, yaml, submit for polar
+gmesh2exo diamond_n2.msh # Create exo file from gmesh
+exo-info  diamond_n2.exo  # Show info
+exo-flatten  diamond_n2.exo -o diamond_n1.exo  # Create 2D mesh (quads) from 3D mesh (hexs)
+exo-zextrude diamond_n1.exo -z 4 -n 120       # Create 3D mesh from 2D mesh
+exo-rotate   diamond_n120.exo -a 30             # Rotate mesh by 30 deg
+nalu-aseq input.yaml -a -30 30 10 -j polar -b submit.sh # Create mesh, yaml, submit for polar
 nalu-restart input.yaml -b submit.sh # Create restart yaml and submit script
 ```
 

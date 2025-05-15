@@ -59,7 +59,7 @@ def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, de
             # Only keep files that end with .digits.digits
             restart_files = [f for f in candidates if re.search(r'\.\d+\.\d+$', f)]
             if len(restart_files) == 0:
-                raise Exception('No restart files found')
+                raise Exception('Cannot infer restart time from restart files.\nNo restart files found with pattern: {}.\nMake sure simulations were run, or,  explicitely set the restart time with the flag --it NEW_TIME_STEP .'.format(pattern))
 
             myprint('Restart file', restart_files[0])
             times = exo_get_times(restart_files[0])

@@ -374,22 +374,20 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
                 side_sets = adjust_side_sets(side_sets, rotated_coords, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, elem_to_face_nodes)
 
         # Write rotated mesh to a new Exodus file
-
         if output_file is None:
+            # If user does not specify output file name, we look for _aoaXXX, if found, we replace it.
             base_dir = os.path.dirname(input_file)
             base_name = os.path.basename(input_file)
             base, ext = os.path.splitext(base_name)
             aoa = extract_aoa(base)
-            print('>>> Old AoA: ', aoa)
             if aoa is None:
-                base += '_rot'+int(angle)
+                base += '_aoa'+str(int(angle))
             else:
                 aoa_new = int(aoa + angle)
-                print('>>> New AoA: ', aoa_new)
+                #print('>>> New AoA: ', aoa_new)
                 base = replace_aoa(base, aoa_new)
 
             output_file = os.path.join(base_dir, base+ext)
-            print('>>> outputfile', output_file )
 
         with Timer("Writing rotated Exodus file", silent=not profiler):
             with ExodusIIFile(output_file, mode="w") as exo_out:
