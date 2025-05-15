@@ -1,4 +1,3 @@
-import meshio
 
 import os
 import numpy as np
@@ -41,6 +40,7 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
         fileout (str): Output Exodus II file name. If None, defaults to 'converted_mesh.e'.
         verbose (bool): If True, print detailed information during conversion.
     """
+    import meshio
 
     # Default output file name
     if fileout is None:
