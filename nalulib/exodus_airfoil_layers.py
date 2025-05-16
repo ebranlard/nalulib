@@ -231,6 +231,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
     next_layer_elem_sides = side_set.sides
     layers = []
 
+    all_front_found=False
     with Timer('Finding fronts', silent = not profiler):
         print('--- Finding fronts:')
         for layer_idx in range(0, num_layers):
@@ -253,6 +254,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
             next_layer_elem_ids, next_layer_elem_sides = find_next_layer( current_layer_elem_ids, current_layer_elem_sides, elem_to_sides, side_to_element_map)
 
             if len(next_layer_elem_ids) == 0:
+                all_front_found=True
                 print("[WARN] No more layers found. Stopping extraction.")
                 break
         
@@ -310,6 +312,12 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
                 f"y={cumulative_avg_height:8.5f} - "
                 f"dy:(min={min_distance:.6f}, avg={avg_distance:.6f}, max={max_distance:.6f}) - "
                 f"Growth=({avg_growth:.3f}, min={min_growth:.3f}, max={max_growth:.3f})")
+    print('--- Basic dimensions')
+    if all_front_found:
+        print('Number of fronts          :', len(layers), '(normal to chord)' )
+    else:
+        print('Number of fronts extracted:', len(layers), '(normal to chord)' )
+    print('Number of points per layer:', len(layers[0]), '(looping along chord)' )
 
     with Timer('Outputs', silent = not profiler):
         print(f'--- Outputs:  airfoil: {write_airfoil}, layers: {write_layers}, gmsh: {gmsh_write}, plot: {plot}')
