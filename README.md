@@ -1,3 +1,5 @@
+[![Build status](https://github.com/ebranlard/nalulib/workflows/Tests/badge.svg)](https://github.com/ebranlard/nalulib/actions?query=workflow%3A%22Tests%22)
+
 # nalulib
 
 Small tools to work with airfoils in nalu-wind and 2D/3D airfoil meshes.
@@ -20,7 +22,8 @@ After performing the pip install, the following tools should be accessible from 
  - `exo-layers`: extract and display information (thickness, growth) for layers about the wing sideset
  - `nalu-restart`: write a new yaml file and slurm script based on latest time found in restart file
  - `nalu-aseq`: write, meshes, yaml files and slurm scripts  for a sequence of angle of attack
- - `gmesh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
+ - `gmsh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
+ - `plt3d2exo: convert a regular plot3d mesh file to exodus format (side-sets based on omesh angles). 
 
 
 Typical usage (minimal runnable example):

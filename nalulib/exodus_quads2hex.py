@@ -214,7 +214,7 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
     for side_set_id, side_set_data in new_side_sets.items():
         if len(side_set_data["elements"]) == 0:
             if side_set_data['name'].lower().startswith('wing-pp'):
-                print(f'[WARN] Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-ss_wing_pp. Deleting this side set.')
+                print(f"[WARN] Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-ss_wing_pp. Deleting this side set.")
                 delete_keys.append(side_set_id)
             else:
                 raise ValueError(f"Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-")
