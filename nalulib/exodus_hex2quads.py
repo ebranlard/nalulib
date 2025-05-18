@@ -4,27 +4,11 @@ import os
 # Local
 from nalulib.essentials import *
 from nalulib.exodusii.file import ExodusIIFile
+from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, write_exodus_quads
 
-# Define the faces of a HEX8 element
-HEX_FACES = [
-    [1, 5, 4, 0],  # 1 
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
-]
 
-QUAD_SIDES = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 0]]
-
+# TODO
 SIDE_SETS_EXCLUDE=['front', 'back','wing-pp', 'wing_pp', 'front_bg', 'back_bg']
-
-
-
 
 def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False):
     # Read basic information
@@ -186,7 +170,6 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False)
             print(f"    Sides   : {side_set_data['sides'][:5]} ({len(side_set_data['sides'])}, {len(np.unique(side_set_data['sides']))})")
     return quads, side_sets, node_coords, z_ref
 
-
 def reindex_quads(quads, old_node_coords, side_sets, z_ref, verbose=False, profiler=False):
     # Step 1.1: Re-ID the nodes and update the quads
     with Timer('Re-iding nodes', silent=not profiler, writeBefore=True):
@@ -209,43 +192,6 @@ def reindex_quads(quads, old_node_coords, side_sets, z_ref, verbose=False, profi
             new_side_sets[new_id+1] = side_set_data
     return quads, nodes_coords, new_side_sets
 
-
-
-def write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=True, z_ref=None, profiler=False, block_name_in=None):
-    with Timer('Writing file', silent=not profiler, writeBefore=True):
-        with ExodusIIFile(output_file, mode="w") as exo_out:
-            exo_out.put_init(
-                title=f"Plane QUADs at z={z_ref}",
-                num_dim=2,
-                num_nodes=len(nodes_coords),
-                num_elem=len(quads),
-                num_elem_blk=1,
-                num_node_sets=0,
-                num_side_sets=len(side_sets),
-                double=True #  Added by Emmanuel
-            )
-
-            # Write node coordinates (only nodes in the plane)
-            exo_out.put_coord(nodes_coords[:, 0], nodes_coords[:, 1], nodes_coords[:, 2])
-            exo_out.put_coord_names(["X", "Y"])
-
-            # Write element block
-            exo_out.put_element_block(0, "QUAD", len(quads), 4)
-            quad_connectivity = np.array([[node_id for node_id in quad['node_ids']] for quad in quads])
-            exo_out.put_element_conn(0, quad_connectivity)
-            block_name = 'fluid-quad'
-            if block_name_in is not None:
-                if block_name_in.lower().endswith('-hex'):
-                    block_name= block_name_in.replace('-hex','-quad').replace('-HEX','-quad')
-            exo_out.put_element_block_names([block_name])
-
-            # Write side sets
-            for side_set_id, side_set_data in side_sets.items():
-                exo_out.put_side_set_param(side_set_id, len(side_set_data["elements"]))
-                exo_out.put_side_set_sides(side_set_id, side_set_data["elements"], side_set_data["sides"])
-                exo_out.put_side_set_name(side_set_id, side_set_data["name"])
-            exo_out.close()
-
 def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, profiler=False):
     """
     Extract a plane of HEX elements at a specific Z value, convert to QUADs, and export to a new Exodus file.
@@ -257,8 +203,7 @@ def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, p
         verbose (bool): If True, print detailed information during processing.
     """
     if output_file is None:
-        #output_file = os.path.splitext(input_file)[0] + "_quads.exo"
-        output_file = os.path.splitext(input_file)[0] + "_n1.exo"
+        output_file = rename_n(input_file, nSpan=1)
 
     print( 'Opening Exodus file      :', input_file)
     # Read exodus and extrad quads at z_ref
@@ -272,8 +217,13 @@ def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, p
     quads, nodes_coords, side_sets = reindex_quads(quads, node_coords, side_sets, z_ref, verbose=verbose, profiler=profiler)
 
     # Write to file
-    write_exodus_quads(output_file, quads, nodes_coords, side_sets, verbose=verbose, z_ref=z_ref, profiler=profiler, block_name_in=block_name_in)
-    print(f"Written Exodus file      : {output_file}")
+    title=f"Plane QUADs at z={z_ref}",
+    conn = np.array([[node_id for node_id in quad['node_ids']] for quad in quads])
+    block_name = 'fluid-quad'
+    if block_name_in is not None:
+        if block_name_in.lower().endswith('-hex'):
+            block_name= block_name_in.replace('-hex','-quad').replace('-HEX','-quad')
+    write_exodus_quads(output_file, nodes_coords, conn, title=title, side_sets=side_sets, block_name=block_name, verbose=True, profiler=profiler)
     return output_file
 
 
@@ -285,7 +235,7 @@ def exo_hex2quads():
     parser = argparse.ArgumentParser(description="Extract a plane of HEX elements at a specific Z value, convert to QUADs, and export to a new Exodus file.")
     parser.add_argument("input_file", type=str, help="Path to the input Exodus file containing the HEX mesh.")
     parser.add_argument("-o", "--output_file", metavar="Output_file", dest="output", type=str, default=None,
-                        help="Path to the output Exodus file. Defaults to '<input_file>_quads.exo'.")
+                        help="Path to the output Exodus file. Defaults to '<input_file>_n1.exo'.")
     parser.add_argument("-z", metavar="Z_ref", type=float, default=None,
                         help="Reference Z value for the plane. If None, the Z value of the first node is used.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")

@@ -1,33 +1,15 @@
 import numpy as np
 import sys
 import os
-import re
 # Local
 from nalulib.essentials import *
+from nalulib.exodus_core import write_exodus, HEX_FACES, QUAD_SIDES
 from nalulib.exodusii.file import ExodusIIFile
 
-# Define the faces of a HEX8 element
-HEX_FACES = [
-    [1, 5, 4, 0],  # 1 
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
-]
 
-QUAD_SIDES = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 0]]
-
+# TODO
 SIDE_SETS_EXCLUDE=['front', 'back','wing-pp']
 
-
-def extract_n(s):
-    match = re.search(r'_n(\d+)', s)
-    return int(match.group(1)) if match else None
 
 def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0, verbose=True, airfoil2wing=True, ss_wing_pp=True, profiler=False, ss_suffix=None):
     """
@@ -42,17 +24,7 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
     """
     # --- Default output file - We replace _n1 with _nNSPAN if possible
     if output_file is None:
-        base_dir = os.path.dirname(input_file)
-        base_name = os.path.basename(input_file)
-        base, ext = os.path.splitext(base_name)
-        n = extract_n(base)
-        if n is not None:
-            base = base.replace('_n'+str(n), '_n'+str(nSpan))
-        else:
-            base +='_n'+str(nSpan)
-        output_file = os.path.join(base_dir, base+ext)
-        if os.path.basename(output_file) == os.path.basename(input_file):
-            raise Exception()
+        output_file = rename_n(input_file, nSpan)
 
     print('Opening Exodus file      :', input_file)
     with ExodusIIFile(input_file, mode="r") as exo:
@@ -249,40 +221,16 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
     for key in delete_keys:
         del new_side_sets[key]
 
+
+
     # --- Write the extruded mesh to a new Exodus file
-    with Timer('Writing file', silent=not profiler):
-        with ExodusIIFile(output_file, mode="w") as exo_out:
-            exo_out.put_init(
-                title=f"Extruded HEX mesh from {input_file}",
-                num_dim=3,
-                num_nodes=len(new_node_coords),
-                num_elem=len(hex_conn),
-                num_elem_blk=1,
-                num_node_sets=0,
-                num_side_sets=len(new_side_sets),
-                double=True #  Added by Emmanuel
-            )
+    title=f"Extruded HEX mesh from {input_file}"
+    block_name ='fluid-hex'
+    if block_name_in is not None:
+        if block_name_in.lower().endswith('-quad'):
+            block_name= block_name_in.replace('-quad','-hex').replace('-QUAD','-hex')
+    write_exodus(output_file, new_node_coords, hex_conn, title=title, side_sets=new_side_sets, block_name=block_name, verbose=True, profiler=profiler)
 
-            # Write node coordinates
-            exo_out.put_coord(new_node_coords[:, 0], new_node_coords[:, 1], new_node_coords[:, 2])
-            exo_out.put_coord_names(["X", "Y", "Z"])
-
-            # Write element block
-            exo_out.put_element_block(0, "HEX8", len(hex_conn), 8)
-            exo_out.put_element_conn(0, hex_conn)
-            block_name ='fluid-hex'
-            if block_name_in is not None:
-                if block_name_in.lower().endswith('-quad'):
-                    block_name= block_name_in.replace('-quad','-hex').replace('-QUAD','-hex')
-            exo_out.put_element_block_names([block_name])
-
-            # Write side sets
-            for side_set_id, side_set_data in new_side_sets.items():
-                exo_out.put_side_set_param(side_set_id, len(side_set_data["elements"]))
-                exo_out.put_side_set_sides(side_set_id, side_set_data["elements"], side_set_data["sides"])
-                exo_out.put_side_set_name(side_set_id, side_set_data["name"])
-
-    print(f"Written Exodus file      : {output_file}")
     return output_file
 
 

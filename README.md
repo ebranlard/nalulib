@@ -26,9 +26,11 @@ After performing the pip install, the following tools should be accessible from 
 Typical usage (minimal runnable example):
 ```bash
 cd examples
-gmesh2exo -h # Display help
-gmesh2exo diamond_n2.msh       # Create exo file from gmesh
-exo-info  diamond_n2.exo       # Show info
+gmsh2exo -h # Display help
+gmsh2exo diamond_n2.msh             # Create exo file from gmesh
+plt3d2exo diamond_n2.fmt            # Create exo file from plot3d
+plt3d2exo diamond_n2.fmt --flatten  # Create quad-exo file from plot3d
+exo-info  diamond_n2.exo            # Show info
 exo-layers diamond_n2.exo -n 2000 --layers # Extract layers around airfoil and diagnostics
 exo-flatten  diamond_n2.exo -o diamond_n1.exo  # Create 2D mesh (quads) from 3D mesh (hexs)
 exo-zextrude diamond_n1.exo -z 4 -n 120       # Create 3D mesh from 2D mesh

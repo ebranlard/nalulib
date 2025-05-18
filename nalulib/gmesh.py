@@ -1,6 +1,7 @@
 import numpy as np
+import os
 
-from nalulib.gmesh_gmesh2exodus import gmesh2exo
+from nalulib.gmesh_gmesh2exodus import gmsh2exo
 
 
 def save_mesh(points, cells, filename="airfoil_omesh.msh"):

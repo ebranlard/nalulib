@@ -1,10 +1,28 @@
 import numpy as np
 import time
 import re
+import os
 
 # --------------------------------------------------------------------------------}
 # --- Misc tools
 # --------------------------------------------------------------------------------{
+def extract_n(s):
+    match = re.search(r'_n(\d+)', s)
+    return int(match.group(1)) if match else None
+
+def rename_n(input_file, nSpan):
+    base_dir = os.path.dirname(input_file)
+    base_name = os.path.basename(input_file)
+    base, ext = os.path.splitext(base_name)
+    n = extract_n(base)
+    if n is not None:
+        base = base.replace('_n'+str(n), '_n'+str(nSpan))
+    else:
+        base +='_n'+str(nSpan)
+    output_file = os.path.join(base_dir, base+ext)
+    if os.path.basename(output_file) == os.path.basename(input_file):
+        raise Exception('Output file is the same as input file')
+    return output_file
 
 def extract_aoa(s):
     match = re.search(r'_aoa(-?\d+)', s, re.IGNORECASE)

@@ -6,23 +6,9 @@ import re
 # Local
 from nalulib.essentials import *
 from nalulib.exodusii.file import ExodusIIFile
-
-
-HEX_FACES = [
-    [1, 5, 4, 0],  # 1 
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
-]
-
-QUAD_SIDES = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 0]]
-
+from nalulib.angles import is_angle_in_segment, compute_angles, angle_segment
+from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, set_omesh_inlet_outlet_ss
+from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, ELEMTYPE_2_NUM_DIM, ELEMTYPE_2_SIDE
 
 def rotate_coordinates(coords, angle, center):
     """
@@ -40,12 +26,9 @@ def rotate_coordinates(coords, angle, center):
     # Subtract the center to shift the rotation origin
     x1 = coords[:, 0] - x_center
     y1 = coords[:, 1] - x_center
-
     # Apply the rotation matrix
     cos_angle = np.cos(angle)
     sin_angle = np.sin(angle)
-    #x2 = cos_angle * x1 - sin_angle * y1 + x_center
-    #y2 = sin_angle * x1 + cos_angle * y1 + y_center
     x2 =  cos_angle * x1 + sin_angle * y1 + x_center
     y2 = -sin_angle * x1 + cos_angle * y1 + y_center
 
@@ -55,177 +38,7 @@ def rotate_coordinates(coords, angle, center):
     else:
         return np.column_stack((x2, y2))
 
-def compute_angles(coords, center):
-    """
-    Compute angles of nodes relative to the center.
-
-    Parameters:
-        coords (np.ndarray): Node coordinates (N x 3).
-        center (tuple): Center of rotation (x, y).
-
-    Returns:
-        np.ndarray: Angles in radians.
-    """
-    x_center, y_center = center
-    relative_coords = coords[:, :2] - np.array([x_center, y_center])
-    angles = np.arctan2(relative_coords[:, 1], relative_coords[:, 0])
-    return np.mod(angles, 2 * np.pi)  # Ensure angles are in [0, 2π]
-
-def is_angle_in_segment(angles, start_angle, span, strict_upper=True):
-    """
-    Check if angles are within a given angular segment.
-
-    Parameters:
-        angles (np.ndarray): Angles to check (in radians, normalized to [0, 2π]).
-        start_angle (float): Start angle of the segment (in radians, normalized to [0, 2π]).
-        span (float): Angular span of the segment (in radians).
-        strict_upper (bool): Whether to use a strict upper bound for the segment.
-
-    Returns:
-        np.ndarray: Boolean array indicating whether each angle is within the segment.
-    """
-    angles = np.mod(angles, 2 * np.pi)
-    start_angle = np.mod(start_angle, 2 * np.pi)
-    end_angle = np.mod(start_angle + span, 2 * np.pi)
-
-    if strict_upper:
-        if end_angle > start_angle:
-            return (angles >= start_angle) & (angles < end_angle)
-        else:  # Segment wraps around 0
-            return (angles >= start_angle) | (angles < end_angle)
-    else:
-        if end_angle > start_angle:
-            return (angles >= start_angle) & (angles <= end_angle)
-        else:  # Segment wraps around 0
-            return (angles >= start_angle) | (angles <= end_angle)
-
-def angle_segment(angles):
-    """
-    Find the angular segment that contains all the given angles in the anti-clockwise direction.
-
-    Parameters:
-        angles (np.ndarray): Angles in radians (normalized to [0, 2π]).
-
-    Returns:
-        tuple: Start angle and span of the segment (in radians).
-    """
-    # Normalize angles to [0, 2π]
-    angles = np.mod(angles, 2 * np.pi)
-    angles = np.sort(angles)
-
-    # Compute differences between consecutive angles, including wrap-around
-    diffs = np.diff(np.concatenate((angles, [angles[0] + 2 * np.pi])))
-
-    # Find the largest gap (clockwise direction)
-    max_gap_idx = np.argmax(diffs)
-    start_angle = angles[(max_gap_idx + 1) % len(angles)]  # Start angle is after the largest gap
-    span = 2 * np.pi - diffs[max_gap_idx]  # Span is the complement of the largest gap
-
-    return start_angle, span
-
-def adjust_side_sets(side_sets, node_coords, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, elem_to_face_nodes, debug=False):
-    """
-    Adjust inlet and outlet side sets after rotation.
-
-    Parameters:
-        side_sets (dict): Original side sets.
-        node_coords (np.ndarray): Rotated node coordinates (N x 3).
-        angle_center (tuple): Center for defining angles
-        inlet_start (float): Start angle of the inlet segment (in radians).
-        inlet_span (float): Angular span of the inlet segment (in radians).
-        outlet_start (float): Start angle of the outlet segment (in radians).
-        outlet_span (float): Angular span of the outlet segment (in radians).
-        elem_to_face_nodes (dict): Mapping of (element ID, side ID) to node IDs.
-
-    Returns:
-        dict: Adjusted side sets.
-    """
-    # Combine inlet and outlet elements and sides
-    combined_elements = []
-    combined_sides = []
-    for side_set_id, side_set_data in side_sets.items():
-        if side_set_data["name"] in ["inlet", "outlet"]:
-            combined_elements.extend(side_set_data["elements"])
-            combined_sides.extend(side_set_data["sides"])
-
-    combined_elements = np.array(combined_elements)
-    combined_sides = np.array(combined_sides)
-    if debug:
-        print('Combined elements:', combined_elements)
-        print('Combined sides:', combined_sides)
-
-    # Compute angles for the middle points of the combined elements' faces
-    num_faces = len(combined_elements)
-    midpoints = np.zeros((num_faces, 2))  # Only X and Y are needed for 2D angles
-    combined_mid_angles = np.zeros(num_faces)
-    for i, (elem, side) in enumerate(zip(combined_elements, combined_sides)):
-        face_node_ids = elem_to_face_nodes[(elem, side)]
-        face_coords = node_coords[face_node_ids - 1]  # Convert to 0-based indexing
-        midpoints[i] = np.mean(face_coords[:, :2], axis=0)  # Compute the midpoint (X, Y)
-        combined_mid_angles[i] = np.arctan2(midpoints[i, 1] - angle_center[1], midpoints[i, 0] - angle_center[0])
-
-    # Normalize angles to [0, 2π]
-    combined_mid_angles = np.mod(combined_mid_angles, 2 * np.pi) 
-
-    if debug:
-        print('Combined mid angles (degrees):', np.around(np.degrees(combined_mid_angles),1).astype(int))
-        print('Segment: Inlet:', np.degrees(inlet_start), 'Span:', np.degrees(inlet_span), 'End:', np.degrees(inlet_start + inlet_span))
-
-    # Determine new inlet and outlet elements based on angular segments
-    inlet_mask  = is_angle_in_segment(combined_mid_angles, inlet_start, inlet_span, strict_upper=False)
-    outlet_mask = is_angle_in_segment(combined_mid_angles, outlet_start, outlet_span, strict_upper=False)
-    # Check if the two are disjoint and forms a complete set    
-    try:
-        assert np.all(np.logical_xor(inlet_mask, outlet_mask)), "Inlet and outlet masks are not disjoint."
-        assert np.all(inlet_mask | outlet_mask), "Inlet and outlet masks do not cover all elements!"    
-    except AssertionError as e:
-        print('[WARN] Inlet and outlet masks are not disjoint or do not cover all elements! Using a strict upper bound')
-        inlet_mask  = is_angle_in_segment(combined_mid_angles, inlet_start, inlet_span, strict_upper=True)
-        outlet_mask = is_angle_in_segment(combined_mid_angles, outlet_start, outlet_span, strict_upper=True)
-        try:
-            assert np.all(np.logical_xor(inlet_mask, outlet_mask)), "Inlet and outlet masks are not disjoint."
-            assert np.all(inlet_mask | outlet_mask), "Inlet and outlet masks do not cover all elements!"    
-        except AssertionError as e:
-            print('[WARN] Inlet and outlet masks are not disjoint or do not cover all elements despite upper bound! Using a negative mask for outlet.')
-            outlet_mask = np.logical_not(inlet_mask)
-
-    if debug:
-        print('Inlet mask:', inlet_mask)
-        print('Outlet mask:', outlet_mask)
-
-    new_inlet_elements = combined_elements[inlet_mask]
-    new_inlet_sides = combined_sides[inlet_mask]
-    new_outlet_elements = combined_elements[outlet_mask]
-    new_outlet_sides = combined_sides[outlet_mask]
-
-    # Ensure no intersection and full coverage
-    inlet_set = set(zip(new_inlet_elements, new_inlet_sides))
-    outlet_set = set(zip(new_outlet_elements, new_outlet_sides))
-    assert inlet_set.isdisjoint(outlet_set), "Inlet and outlet side sets have overlapping elements!"
-    assert inlet_set.union(outlet_set) == set(zip(combined_elements, combined_sides)), \
-        "Inlet and outlet side sets do not cover all combined elements!"
-
-    # Update side sets
-    adjusted_side_sets = {}
-    for side_set_id, side_set_data in side_sets.items():
-        if side_set_data["name"] == "inlet":
-            adjusted_side_sets[side_set_id] = {
-                "elements": new_inlet_elements.tolist(),
-                "sides": new_inlet_sides.tolist(),
-                "name": "inlet"
-            }
-        elif side_set_data["name"] == "outlet":
-            adjusted_side_sets[side_set_id] = {
-                "elements": new_outlet_elements.tolist(),
-                "sides": new_outlet_sides.tolist(),
-                "name": "outlet"
-            }
-        else:
-            adjusted_side_sets[side_set_id] = side_set_data
-
-    return adjusted_side_sets
-
-def find_inlet_outlet_segments(side_sets, node_coords, center, elem_to_face_nodes, debug=False, verbose=True):
+def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nodes, debug=False, verbose=True):
     """
     Find the angular segments for inlet and outlet nodes.
 
@@ -283,9 +96,9 @@ def find_inlet_outlet_segments(side_sets, node_coords, center, elem_to_face_node
     # Verify that outlet_span is close to  2 * np.pi - inlet_span 
     assert np.isclose(outlet_span, 2 * np.pi - inlet_span, atol= np.pi/20), "Outlet span is not complementary to inlet span!"
 
-    return inlet_start, inlet_span, outlet_start, outlet_span
+    return inlet_start, inlet_span, outlet_start
 
-def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, outlet_span=None, keep_io_side_set=False, verbose=False, profiler=False):
+def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, keep_io_side_set=False, verbose=False, profiler=False):
     """
     Rotate an Exodus file's node coordinates and adjust side sets.
 
@@ -298,7 +111,6 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
         inlet_start (float): Start angle of inlet segment (in radians).
         inlet_span (float): Angular span of inlet segment (in radians).
         outlet_start (float): Start angle of outlet segment (in radians).
-        outlet_span (float): Angular span of outlet segment (in radians).
         keep_io_side_set (bool): Whether to keep inlet and outlet side sets unchanged.
         verbose (bool): Enable verbose output.
         profiler (bool): Enable profiling with timers.
@@ -326,8 +138,10 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
             blk_id = exo.get_element_block_ids()[0]
             elem_conn = exo.get_element_conn(blk_id)
             elem_type = exo.get_element_block(blk_id).elem_type  # Assuming all blocks have the same type
-    FACE_MAP = {'HEX': HEX_FACES, 'HEX8': HEX_FACES, 'QUAD': QUAD_SIDES}[elem_type]
-    num_dim = {'HEX': 3, 'HEX8': 3, 'QUAD': 2}[elem_type]
+
+
+    FACE_MAP = ELEMTYPE_2_SIDE[elem_type]
+    num_dim = ELEMTYPE_2_NUM_DIM[elem_type]
 
     # Precompute a mapping of element ID and side ID to node IDs for inlet and outlet elements only
     with Timer("Precomputing element-to-face mapping", silent=not profiler):
@@ -339,9 +153,9 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
                     elem_to_face_nodes[(elem, side)] = face_node_ids
 
     # Find inlet and outlet angular segments (before rotation)
-    if inlet_start is None or inlet_span is None or outlet_start is None or outlet_span is None:
+    if inlet_start is None or inlet_span is None or outlet_start is None:
         with Timer("Finding inlet and outlet angular segments", silent=not profiler):
-            inlet_start, inlet_span, outlet_start, outlet_span = find_inlet_outlet_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, verbose=verbose)
+            inlet_start, inlet_span, outlet_start  = inlet_outlet_angle_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, verbose=verbose)
     
     if hasattr(angle, '__len__'):
         angles = angle
@@ -368,10 +182,26 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
             if verbose:
                 print(f"Angle center       : {angle_center}")
                 print(f"Angle span, inlet  : Start={np.degrees(inlet_start):5.1f}°, Span={np.degrees(inlet_span):5.1f}° (anticlockwise)")
-                print(f"Angle span, outlet : Start={np.degrees(outlet_start):5.1f}°, Span={np.degrees(outlet_span):5.1f}° (anticlockwise)")
+                print(f"Angle span, outlet : Start={np.degrees(outlet_start):5.1f}°, Span={np.degrees(2*np.pi-inlet_span):5.1f}° (anticlockwise)")
 
             with Timer("Adjusting side sets", silent=not profiler):
-                side_sets = adjust_side_sets(side_sets, rotated_coords, angle_center, inlet_start, inlet_span, outlet_start, outlet_span, elem_to_face_nodes)
+                # Combine inlet and outlet elements and sides
+                combined_elements = []
+                combined_sides = []
+                for side_set_id, side_set_data in side_sets.items():
+                    if side_set_data["name"] in ["inlet", "outlet"]:
+                        combined_elements.extend(side_set_data["elements"])
+                        combined_sides.extend(side_set_data["sides"])
+                combined_elements = np.array(combined_elements)
+                combined_sides = np.array(combined_sides)
+                # Find the new inlet and outlet side sets based on angular position
+                new_side_sets = set_omesh_inlet_outlet_ss(rotated_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center, inlet_start, inlet_span, outlet_start)
+                for side_set_id, side_set_data in side_sets.items():
+                    if side_set_data["name"] in ["inlet", "outlet"]:
+                        for new_side_set in new_side_sets:
+                            if side_set_data["name"] == new_side_set["name"]:
+                                side_sets[side_set_id] = new_side_set
+                                break
 
         # Write rotated mesh to a new Exodus file
         if output_file is None:
@@ -384,7 +214,6 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
                 base += '_aoa'+str(int(angle))
             else:
                 aoa_new = int(aoa + angle)
-                #print('>>> New AoA: ', aoa_new)
                 base = replace_aoa(base, aoa_new)
 
             output_file = os.path.join(base_dir, base+ext)
@@ -449,17 +278,14 @@ def exo_rotate():
         inlet_start = np.radians(90)
         inlet_span = np.radians(180)
         outlet_start = np.radians(270)
-        outlet_span = np.radians(180)
     elif args.bc_angles:
         inlet_start = np.radians(args.bc_angles[0])
         inlet_span = np.radians(args.bc_angles[1])
         outlet_start = np.radians(args.bc_angles[0] + args.bc_angles[1])
-        outlet_span = 2 * np.pi - inlet_span  # Infer outlet span
     else:
         inlet_start = None
         inlet_span = None
         outlet_start = None
-        outlet_span = None
 
     rotate_exodus(
         input_file=args.input_file,
@@ -470,7 +296,6 @@ def exo_rotate():
         inlet_start=inlet_start,
         inlet_span=inlet_span,
         outlet_start=outlet_start,
-        outlet_span=outlet_span,
         keep_io_side_set=args.keep_io_side_set,
         verbose=args.verbose,
         profiler=args.profiler

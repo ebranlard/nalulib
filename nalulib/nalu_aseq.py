@@ -54,7 +54,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
         print('[INFO] No AoA found in mesh name, assuming 0. Change it with --aoa_ori.')
     
     # --- Mesh creation
-    print('-------------------------------------------------------------------------------------')
+    print('----------------------------------------------------------------------------')
     mesh_dir = os.path.join(base_dir, 'meshes')
     myprint('Creating meshes in : ', mesh_dir)
     center = (0.0, 0.0)
@@ -65,7 +65,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
     rotate_exodus(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose)
-    print('-------------------------------------------------------------------------------------')
+    print('----------------------------------------------------------------------------')
 
 
     # --- Create YAML files
@@ -100,128 +100,11 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
         yml.save(nalu_file)
         myprint('Written NALU File', nalu_file)
 
-
-
-
-
-
-
-
     # --- Create BATCH files
     for alpha, nalu_file  in zip(aseq, nalu_files):
         jobname_case = jobname + 'A{:.1f}'.format(alpha)
         new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case)
         myprint('Written Batch File', new_batch, jobname_case)
-
-
-
-
-#
-#    print('--- Editing YAML file for restart')
-#    # --- Edit yaml file
-#    for i in range(len(realms)):
-#        if debug:
-#            print('Realm', i, realms[i]['name'])
-#        try:
-#            restart = realms[i]['restart']
-#        except:
-#            raise Exception('Cannot do reload without a restrt')
-#        if debug:
-#            print('Restart', restart)
-#
-#        start_old = restart['restart_start'] if 'restart_start' in restart else None
-#        time_old = restart['restart_time'] if 'restart_time' in restart else None
-#
-#        restart['restart_start'] = iRestart
-#        restart['restart_time'] = tRestart
-#        myprint('restart_start', start_old, restart['restart_start'])
-#        myprint('restart_time',  time_old, restart['restart_time'])
-#
-#        # --- Change mesh
-#        mesh_ori = realms[i]['mesh']
-#        mesh_new = restart['restart_data_base_name']
-#        realms[i]['mesh'] = mesh_new
-#        myprint('Mesh', mesh_ori, mesh_new)
-#        # --- Change mesh
-#        if 'automatic_decomposition_type' in realms[i]:
-#            try:
-#                myprint('automatic_decomposition:', realms[i]['automatic_decomposition_type'], 'DELETED')
-#                del   realms[i]['automatic_decomposition_type']
-#            except:
-#                print('[FAIL] Failed to delete automatic_decomposition_type')
-#                pass
-#        else:
-#            print('[INFO] automatic_decomposition_type absent')
-#        
-#        # --- Rebalance not needed
-#        if 'rebalance_mesh' in realms[i]:
-#            try:
-#                myprint('rebalance_mesh:', realms[i]['rebalance_mesh'], 'DELETED')
-#                del   realms[i]['rebalance_mesh']
-#            except:
-#                print('[FAIL] Failed to delete rebalance_mesh')
-#                pass
-#        if 'stk_rebalance_method' in realms[i]:
-#            try:
-#                myprint('stk_rebalance_method:', realms[i]['stk_rebalance_method'], 'DELETED')
-#                del   realms[i]['stk_rebalance_method']
-#            except:
-#                print('[FAIL] Failed to delete stk_rebalance_method')
-#                pass
-#
-#        # --- Change outputs
-#        if 'output' in realms[i]:
-#            if 'output_start' in realms[i]['output']:
-#                output_start_old = realms[i]['output']['output_start']
-#            else:
-#                output_start_old = None
-#            realms[i]['output']['output_start'] = iRestart
-#            myprint('output_start: ', output_start_old, realms[i]['output']['output_start']) 
-#        else:
-#            print('[INFO] No output in realm', i)
-#        # --- Change postprocessing
-#        if 'post_processing' in realms[i]:
-#            for j in range(len(realms[i]['post_processing'])):
-#                postpro = realms[i]['post_processing'][j]
-#                outfile = postpro['output_file_name']
-#                print('Postprocessing', j, outfile)
-#                base, ext = os.path.splitext(outfile)
-#                sp = base.split('_')
-#                if nrun is None:
-#                    # --- Infer n restart from the file name
-#                    # Check if the last _2 is a number, if it is increment it, otherwise, add _2
-#                    print('>>> sp' ,sp, sp[-1].isdigit())
-#                    if sp[-1].isdigit():
-#                        nrun = int(sp[-1])+1
-#                        base= '_'.join(sp[:-1])
-#                    else:
-#                        nrun = 2
-#                myprint('[INFO] Number of run', nrun)
-#                base  += '_' + str(nrun)    
-#                postpro['output_file_name'] = base + ext
-#                new_outfile = base + ext
-#                # --- Change mesh
-#                myprint('output_file_name: ', outfile, new_outfile)
-#        else:
-#            print('[INFO] No postprocessing in realm', i)
-#
-#
-#    try:
-#        myprint('hypre_config: ', 'misc' , 'DELETED')
-#        del yml.data['hypre_config']
-#    except:
-#        pass
-#
-#    # --- 
-#    if output_file is None:
-#        base, ext = os.path.splitext(input_file)
-#        sp = input_file.split('_run')
-#        if len(sp) > 1:
-#            base = '_'.join(sp[:-1])
-#        output_file = base + '_run{}.yaml'.format(nrun)
-#    yml.save(output_file)
-#    myprint('Written              ', output_file)
-
 
 
 def nalu_aseq():

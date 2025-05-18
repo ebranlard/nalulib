@@ -1,36 +1,14 @@
-""" 
-Extract the different layers around an airfoil
- compute the minimum max distance between y-layers, growth rate
-
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
-# Local
+# 
+from nalulib.essentials import Timer
+from nalulib.exodusii.file import ExodusIIFile
 from nalulib.exodus_hex2quads import hex_to_quads_plane  # Import the function to convert HEX to QUADS
 from nalulib.meshlib import create_quadrilateral_cells
 from nalulib.gmesh import save_mesh, open_mesh_in_gmsh
-from nalulib.exodusii.file import ExodusIIFile
-from nalulib.essentials import *
-
-# Define the faces of a HEX8 element
-HEX_FACES = [
-    [1, 5, 4, 0],  # 1
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
-]
-
-QUAD_SIDES = [
-    [0, 1], #1
-    [1, 2], #2
-    [2, 3], #3
-    [3, 0], #4
-]
+from nalulib.exodus_core import QUAD_SIDES
 
 SIDE_SETS_NAMES = ['wing', 'wing_pp', 'airfoil']
 
@@ -179,13 +157,13 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
         conversion_needed = block_info.elem_type in ["HEX8", "HEX"]
     if conversion_needed:
         #if verbose:
-        print('--------------------------------- HEX2QUADS --------------------------------------')
-        print("Converting HEX elements to QUADS...")
+        print('------------------------------ HEX2QUADS -----------------------------------')
         output_file = basefilename + "_quads_tmp.exo"
         input_file = hex_to_quads_plane(input_file, output_file=output_file, z_ref=None, verbose=verbose)
         #if verbose:
-        print('----------------------------------------------------------------------------------')
+        print('----------------------------------------------------------------------------')
         print( 'Opening Exodus file      :', input_file)
+    del exo
     with ExodusIIFile(input_file, mode="r") as exo:
         # Get basic information
         node_coords = exo.get_coords()
@@ -210,6 +188,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
         node_coords = exo.get_coords()
         # --- DONE WITH EXO
         #exo.close()
+    del exo
 
     with Timer('Precomputations', silent = not profiler):
         # Precompute element sides and their node sets
@@ -231,7 +210,6 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
     next_layer_elem_sides = side_set.sides
     layers = []
 
-    all_front_found=False
     with Timer('Finding fronts', silent = not profiler):
         print('--- Finding fronts:')
         for layer_idx in range(0, num_layers):
@@ -254,7 +232,6 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
             next_layer_elem_ids, next_layer_elem_sides = find_next_layer( current_layer_elem_ids, current_layer_elem_sides, elem_to_sides, side_to_element_map)
 
             if len(next_layer_elem_ids) == 0:
-                all_front_found=True
                 print("[WARN] No more layers found. Stopping extraction.")
                 break
         
@@ -312,12 +289,6 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
                 f"y={cumulative_avg_height:8.5f} - "
                 f"dy:(min={min_distance:.6f}, avg={avg_distance:.6f}, max={max_distance:.6f}) - "
                 f"Growth=({avg_growth:.3f}, min={min_growth:.3f}, max={max_growth:.3f})")
-    print('--- Basic dimensions')
-    if all_front_found:
-        print('Number of fronts          :', len(layers), '(normal to chord)' )
-    else:
-        print('Number of fronts extracted:', len(layers), '(normal to chord)' )
-    print('Number of points per layer:', len(layers[0]), '(looping along chord)' )
 
     with Timer('Outputs', silent = not profiler):
         print(f'--- Outputs:  airfoil: {write_airfoil}, layers: {write_layers}, gmsh: {gmsh_write}, plot: {plot}')

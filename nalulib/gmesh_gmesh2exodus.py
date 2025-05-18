@@ -31,39 +31,31 @@ hex_faces = [
 ]
 
 
-def gmesh_to_exo(filein, fileout=None, verbose=False):
+def gmesh_to_exo(input_file, output_file=None, verbose=False, profiler=False, debug=False):
     """
     Convert a 3D GMSH mesh file to Exodus II format.
     
     Parameters:
-        filein (str): Input GMSH file name.
-        fileout (str): Output Exodus II file name. If None, defaults to 'converted_mesh.e'.
+        input_file (str): Input GMSH file name.
+        output_file (str): Output Exodus II file name. If None, defaults to 'converted_mesh.e'.
         verbose (bool): If True, print detailed information during conversion.
     """
     import meshio
 
     # Default output file name
-    if fileout is None:
-        fileout = os.path.splitext(filein)[0] + ".exo"
+    if output_file is None:
+        output_file = os.path.splitext(input_file)[0] + ".exo"
     # ------------------------------------------------------------------------------ 
     # --- Read the GMSH mesh file
     # ------------------------------------------------------------------------------ 
-    with Timer('Reading'):
-        print(f"Reading msh file: {filein}")
-        mesh = meshio.read(filein)
+    with Timer('Reading', silent=not profiler):
+        print(f"Reading msh file: {input_file}", end='')
+        mesh = meshio.read(input_file) # create a new line ...
 
     # --------------------------------------------------------------------------------}
     # ---  
     # --------------------------------------------------------------------------------{
-    with Timer('Prepping'):
-        if verbose:
-            print("--- Nodes ---")
-            for node_id, node in zip(node_ids_map.values(), nodes):
-                print(f"Node {node_id-1}: {node}")
-            print("--- Elements ---")
-            for element_id, element in zip(element_ids_map.values(), elements):
-                print(f"Element {element_id-1}: {element}")
-
+    with Timer('Prepping', silent=not profiler):
         # Map physical IDs to names (if available)
         surface_names = {}
         if mesh.field_data:
@@ -84,7 +76,15 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
         node_ids_map = {tuple(node): idx + 1 for idx, node in enumerate(nodes)}
         element_ids_map = {tuple(element): idx + 1 for idx, element in enumerate(elements)}
 
-        if verbose:
+        if debug:
+            print("--- Nodes ---")
+            for node_id, node in zip(node_ids_map.values(), nodes):
+                print(f"Node {node_id-1}: {node}")
+            print("--- Elements ---")
+            for element_id, element in zip(element_ids_map.values(), elements):
+                print(f"Element {element_id-1}: {element}")
+
+        if debug:
             print("--- Nodes ---  0-indexing")
             for node_id, node in zip(node_ids_map.values(), nodes):
                 print(f"Node {node_id-1}: {node}")
@@ -118,7 +118,8 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                 physical_surfaces[surface_id]["quads_original"].append(quad)
 
         # Precompute face node sets for all elements
-        print("Precomputing face node sets for all elements...")
+        if verbose:
+            print("Precomputing face node sets for all elements...")
         element_faces = {}  # Dictionary to store face node sets for each element
         for hex_id, hex_element in enumerate(elements, start=1):  # 1-based hex ID
             element_faces[hex_id] = {
@@ -127,7 +128,8 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
             }
 
         # Create a mapping from node IDs to elements
-        print("Creating node-to-element mapping...")
+        if verbose:
+            print("Creating node-to-element mapping...")
         node_to_elements = {}
         for hex_id, hex_element in enumerate(elements, start=1):  # 1-based hex ID
             for node_id in hex_element:
@@ -138,10 +140,10 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
     # --------------------------------------------------------------------------------}
     # ---  
     # --------------------------------------------------------------------------------{
-    with Timer('Surface mapping'):
+    with Timer('Surface mapping', silent=not profiler):
         for surface_id, surface_data in physical_surfaces.items():
             # Print surface ID and name
-            if verbose:
+            if debug:
                 print('--------------------------------------------------------------------')
                 print(f"Surface ID: {surface_id}, Name: {surface_data['name']}")
                 print(f"  Original Quads:")
@@ -151,7 +153,8 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                     for node_id in quad:
                         print(f"      Node {node_id}: {nodes[node_id]}")
             # --- 
-            print(f"Looking for hex elements matching surface ID: {surface_id} ({surface_data['name']})")
+            if verbose:
+                print(f"Looking for hex elements matching surface ID: {surface_id} ({surface_data['name']})")
             for quad in surface_data["quads_original"]:
                 # Find candidate elements that contain at least one node of the quad
                 candidate_elements = set()
@@ -164,7 +167,7 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                     for face_id, face_node_set in element_faces[hex_id].items():
                         # Compare the quad nodes with the face nodes
                         if set(quad) == face_node_set:
-                            if verbose:
+                            if debug:
                                 print(f"  Match Found!")
                                 print(f"    HEX8 Element ID: {hex_id}")
                                 print(f"    Matching Face ID: {face_id}")
@@ -172,7 +175,7 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                             surface_data["quads_matched"].append((hex_id, face_id))  # Store hex ID and face ID
                             break
             # Debugging: Print matched quads
-            if verbose:
+            if debug:
                 print("   --- Matched Quads ---")
                 print(f"     Matched Quads (HEX8 ID, Face ID): {surface_data['quads_matched']}")
 
@@ -180,17 +183,18 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
     physical_surface_ids_map = {surface_id: idx + 1 for idx, surface_id in enumerate(physical_surfaces.keys())}
 
     # Display summary of the mesh
-    print(f"Number of nodes:    {num_nodes:12d}")
-    print(f"Number of elements: {len(elements):12d}")
-    print("Physical surfaces:")
-    for surface_id, surface_data in physical_surfaces.items():
-        hex_ids  = [h for h,i in surface_data["quads_matched"]]
-        face_ids = [i for h,i in surface_data["quads_matched"]]
-        uface_ids = np.unique(face_ids)
-        print(f"  - Surface ID {surface_id} ({surface_data['name']:10s}): {len(surface_data['quads_matched']):10d} quads, uFace ID {uface_ids}")
+    if verbose:
+        print(f"Number of nodes:    {num_nodes:12d}")
+        print(f"Number of elements: {len(elements):12d}")
+        print("Physical surfaces:")
+        for surface_id, surface_data in physical_surfaces.items():
+            hex_ids  = [h for h,i in surface_data["quads_matched"]]
+            face_ids = [i for h,i in surface_data["quads_matched"]]
+            uface_ids = np.unique(face_ids)
+            print(f"  - Surface ID {surface_id} ({surface_data['name']:10s}): {len(surface_data['quads_matched']):10d} quads, uFace ID {uface_ids}")
 
     # Verbose output
-    if verbose:
+    if debug:
         print("\n--- Surfaces ---")
         for surface_id, surface_data in physical_surfaces.items():
             print(f"Surface ID {surface_id} ({surface_data['name']}):")
@@ -200,8 +204,8 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
     # ------------------------------------------------------------------------------ 
     # --- Write Exodus II file
     # ------------------------------------------------------------------------------ 
-    with Timer('Writting'):
-        with ExodusIIFile(fileout, mode="w") as exo:
+    with Timer('Writting', silent=not profiler):
+        with ExodusIIFile(output_file, mode="w") as exo:
             # Initialize the Exodus file
             exo.put_init(
                 title="Converted Mesh from GMSH",
@@ -232,7 +236,7 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                 side_set_faces = [face_id for _, face_id in surface_data["quads_matched"]]
 
                 # Debugging output for verification
-                if verbose:
+                if debug:
                     print(f"side_set_id {side_set_id}")
                     print(f"Surface ID {surface_id} ({surface_name}): {len(side_set_elems)} elements")
                     print("side_set_elems", side_set_elems)
@@ -243,10 +247,10 @@ def gmesh_to_exo(filein, fileout=None, verbose=False):
                 exo.put_side_set_sides(side_set_id, side_set_elems, side_set_faces)
                 exo.put_side_set_name(side_set_id, surface_name)
 
-    print(f"\nExodus II file '{fileout}' created successfully.")
+    print(f"Written exo file: {output_file}")
 
 
-def gmesh2exo():
+def gmsh2exo():
     """
     Command-line interface to convert a 3D GMSH mesh file to Exodus II format.
     """
@@ -255,6 +259,7 @@ def gmesh2exo():
     parser.add_argument("input_file", type=str, help="Path to the gmesh file.")
     parser.add_argument("-o", "--output_file", type=str, default=None, help="Path to the output Exodus file. Defaults to '<input_file>.exo'.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
+    parser.add_argument("-p", "--profiler", action="store_true", help="Enable profiling.")
 
     args = parser.parse_args()
 
@@ -265,5 +270,5 @@ if __name__ == "__main__":
     import sys
     # Grab the filename from the first system argument or use a default
     filename = sys.argv[1] if len(sys.argv) > 1 else "example.msh"
-    with Timer('Total conversion'):
+    with Timer('Total conversion', silent=not args.profiler):
         gmsh2exo(filename)
