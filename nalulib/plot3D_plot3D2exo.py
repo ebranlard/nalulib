@@ -5,7 +5,6 @@ from nalulib.essentials import *
 #from nalulib.gmesh import *
 #from nalulib.meshlib import *
 #from nalulib.gmesh_gmesh2exodus import gmesh_to_exo
-from nalulib.exodus_core import QUAD_SIDES
 from nalulib.exodus_core import set_omesh_inlet_outlet_ss, write_exodus
 import matplotlib.pyplot as plt
 
@@ -96,7 +95,7 @@ def build_simple_quad_connectivity(dims):
             n1 = (i+1) + (j  ) * ni 
             n2 = (i+1) + (j+1) * ni
             n3 = i     + (j+1) * ni
-            conn.append([n0, n1, n2, n3])
+            conn.append([n0, n3, n2, n1])
     return np.array(conn, dtype=int)
 
 def simplify_coords_for_surface(coords, dims):
@@ -132,7 +131,7 @@ def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inle
         SIDE_AIRFOIL = 5
         SIDE_FARFIELD = 6
     else:
-        SIDE_AIRFOIL = 1
+        SIDE_AIRFOIL = 4
         SIDE_FARFIELD = 2
 
     # Airfoil: elements along j=0 (first row of elements)
