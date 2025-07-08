@@ -10,7 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from curves import *
+from nalulib.curves import *
 # NOTE: consider using shapely for more operations
 # try:
 #     import shapely
@@ -19,7 +19,7 @@ from curves import *
 
 # Local 
 
-_DEFAULT_REL_TOL=0.001
+_DEFAULT_REL_TOL=0.000001
 
 def normalize(x,y):
     c  = np.max(x)-np.min(x)
@@ -244,8 +244,8 @@ class AirfoilShape():
             if self.closed and n2-n1==1:
                 pass # Normal case
             else:
-                if verbose:
-                    print('[WARN] AirfoilShape: {} duplicate(s) removed: {}'.format(n1-n2, duplicate_points))
+                #if verbose:
+                print('[WARN] AirfoilShape: {} duplicate(s) removed: {}'.format(n1-n2, duplicate_points))
         if inPlace:
             self._x = xout
             self._y = yout
@@ -314,10 +314,10 @@ class AirfoilShape():
             y = self.y
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
-        ax.plot(self.x, self.y, label=label)
+        ax.plot(self.x, self.y, '.-', label=label)
         
         if first:
-            ax.plot(self.x[0], self.y[0], 's')
+            ax.plot(self.x[0], self.y[0], 's', label='First point')
 
         if orient:
             c = self.chord
@@ -328,7 +328,8 @@ class AirfoilShape():
 
         ax.set_xlabel('x')
         ax.set_ylabel('y')
-        plt.axis ( 'equal' )
+        ax.legend()
+        ax.set_aspect( 'equal' )
         return ax
 
 

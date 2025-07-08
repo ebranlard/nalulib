@@ -15,6 +15,8 @@ pip install -e .
 ## Command line tools 
 After performing the pip install, the following tools should be accessible from the command line:
 
+ - `arf-convert`: convert an airfoil from one format to another (e.g. csv to plot3d or pointwise)
+ - `pyhyp`: perform mesh extrusion of an airfoil
  - `exo-info`: print info about an exodus file
  - `exo-flatten`: flatten a 3D mesh into a 2D mesh (along z, preserves side-sets)
  - `exo-zextrude`: extrude a 2D mesh into a 3D mesh (along z, preserve side-sets)
@@ -23,7 +25,7 @@ After performing the pip install, the following tools should be accessible from 
  - `nalu-restart`: write a new yaml file and slurm script based on latest time found in restart file
  - `nalu-aseq`: write, meshes, yaml files and slurm scripts  for a sequence of angle of attack
  - `gmsh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
- - `plt3d2exo: convert a regular plot3d mesh file to exodus format (side-sets based on omesh angles). 
+ - `plt3d2exo`: convert a regular plot3d mesh file to exodus format (side-sets based on omesh angles). 
 
 
 Typical usage (minimal runnable example):

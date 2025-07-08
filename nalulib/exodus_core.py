@@ -52,7 +52,7 @@ def write_exodus_hex(filename, coords, conn, block_name='fluid-hex', **kwargs):
     """
     write_exodus(filename, coords, conn, block_name=block_name, num_dim=3, **kwargs )
 
-def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None, num_dim=3, block_name='fluid', profiler=False):
+def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None, num_dim=3, block_name='fluid', profiler=False, double=False):
     """ 
     INPUTS:
       - filename: output Exodus filename
@@ -83,7 +83,7 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
                 num_elem_blk=1,
                 num_node_sets=0,
                 num_side_sets=len(side_sets),
-                double=True #  Added by Emmanuel
+                double=double #  Added by Emmanuel
             )
 
             # Write node coordinates
@@ -94,9 +94,9 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
                 exo.put_coord_names(["X", "Y", "Z"])
 
             # Write element block
-            exo.put_element_block(0, NUM_DIM_2_ELEMTYPE[num_dim], len(conn), 2**num_dim)
-            exo.put_element_conn(0, conn)
-            exo.put_element_block_names([block_name])
+            exo.put_element_block(1, NUM_DIM_2_ELEMTYPE[num_dim], len(conn), 2**num_dim)
+            exo.put_element_conn(1, conn)
+            exo.put_element_block_name(1, block_name)
 
             # Write side sets
             for side_set_id, side_set_data in side_sets.items():
@@ -106,6 +106,8 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
             exo.close()
     del exo
 
+
+
     if verbose:
         print(f"Exodus file written: {filename}")
 
@@ -113,9 +115,12 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
 # --------------------------------------------------------------------------
 # --- Side sets
 # --------------------------------------------------------------------------
-def set_omesh_inlet_outlet_ss(node_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, debug=False):
+def set_omesh_inlet_outlet_ss(node_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center=None, 
+                              inlet_start=None, inlet_span=None, outlet_start=None, 
+                              inlet_name='inlet', outlet_name='outlet',
+                              debug=False):
     """
-    Adjust inlet and outlet side sets after rotation.
+    Adjust inlet and outlet side sets based on angle
 
     Parameters:
         side_sets (dict): Original side sets.
@@ -204,11 +209,11 @@ def set_omesh_inlet_outlet_ss(node_coords, combined_elements, combined_sides, el
     side_sets.append( {
         "elements": new_inlet_elements.tolist(),
         "sides": new_inlet_sides.tolist(),
-        "name": "inlet"
+        "name": inlet_name
     } )
     side_sets.append({
         "elements": new_outlet_elements.tolist(),
         "sides": new_outlet_sides.tolist(),
-        "name": "outlet"
+        "name": outlet_name
     })
     return side_sets

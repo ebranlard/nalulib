@@ -1,15 +1,12 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-import meshio
+
+from nalulib.curves import contour_is_clockwise as is_clockwise 
 
 # ---------------------------------------------------------------------------
 # --- Airfoil library
 # ---------------------------------------------------------------------------
-def is_clockwise(coords):
-    area = 0.5 * np.sum(coords[:-1, 0] * coords[1:, 1] - coords[1:, 0] * coords[:-1, 1])
-    return area < 0  # Clockwise if the area is negative
-
 def load_airfoil_coords(filename):
     coords = np.loadtxt(filename)
     coords = coords[:, :2] # Keep only x and y coordinates

@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 from nalulib.exodusii.file import ExodusIIFile
@@ -6,50 +7,101 @@ from nalulib.essentials import *
 #from nalulib.meshlib import *
 #from nalulib.gmesh_gmesh2exodus import gmesh_to_exo
 from nalulib.exodus_core import set_omesh_inlet_outlet_ss, write_exodus
-import matplotlib.pyplot as plt
+from nalulib.weio.plot3d_file import read_plot3d
 
 
+def _plt3d_to_quads(input_file):
+    # --- Read input
+    dims = np.loadtxt(input_file, skiprows=1,max_rows=1,dtype=int)
+    a = np.loadtxt(input_file, skiprows=2)
+    xyz = a.reshape((3, dims[0]*dims[1]*dims[2] )).transpose()
+    # --- Convert to 2D
+    nx = dims[0]-1
+    ny = dims[2]
+    print('dims:', dims)
+    xyz_2d = np.zeros((nx * ny, 2))
+    for j in range(ny):
+        for i in range(nx):
+            idx = i + j * dims[0] * dims[1]
+            xyz_2d[i + j * nx] = np.r_[xyz[idx,0], xyz[idx,1]]
 
-def read_plot3d(filename, verbose=False):
-    """
-    Reads a simple multi-block Plot3D file (formatted, ASCII).
-    Returns:
-        coords: (n_points, 3) array
-        dims: (n_blocks, 3) list of (ni, nj, nk)
-    """
-    print(f"Reading Plot3D file: {filename}")
-    with open(filename, "r") as f:
-        nblocks = int(f.readline())
-        dims = []
-        for _ in range(nblocks):
-            dims.append(tuple(int(x) for x in f.readline().split()))
-        coords_list = []
-        for block in range(nblocks):
-            ni, nj, nk = dims[block]
-            npts = ni * nj * nk
-            block_coords = np.zeros((npts, 3))
-            for idim in range(3):
-                for k in range(nk):
-                    for j in range(nj):
-                        for i in range(ni):
-                            idx = i + j * ni + k * ni * nj
-                            val = float(f.readline())
-                            block_coords[idx, idim] = val
-            coords_list.append(block_coords)
-        coords = np.vstack(coords_list)
+    # --- Connectivity
+    conn = np.zeros((nx*(ny-1),4),dtype=int)
+    for j in range(ny-1):
+        for i in range(nx-1):
+            conn[i + j * nx] = np.array([i + j * nx, i + (j+1) * nx, i+1 + (j+1) * nx, i+1 + j * nx ])
+        conn[(nx-1) + j * nx] = np.array([(nx-1) + j * nx, nx-1 + (j+1) * nx, (j+1) * nx, j * nx])
+    conn += 1
 
-    if verbose:
-        print("Coordinates shape:", coords.shape)
-        print("Block dimensions:", dims)
-        # Print min/max for x, y, z
-        x_min, x_max = coords[:, 0].min(), coords[:, 0].max()
-        y_min, y_max = coords[:, 1].min(), coords[:, 1].max()
-        z_min, z_max = coords[:, 2].min(), coords[:, 2].max()
-        print(f"x range: [{x_min:.6f}, {x_max:.6f}]")
-        print(f"y range: [{y_min:.6f}, {y_max:.6f}]")
-        print(f"z range: [{z_min:.6f}, {z_max:.6f}]")
+    # Get inflow and outflow elements on the farfield boundary
+    elem_farfield = np.linspace(conn.shape[0]-nx+1, conn.shape[0], nx, dtype=int)
+    coordsx_farfield = np.r_[0.5 * (xyz_2d[-nx:-1, 0] + xyz_2d[-nx+1:,0]), 0.5 *(xyz_2d[-1, 0] + xyz_2d[-nx, 0])]
+    #for i, x in zip(elem_farfield, coordsx_farfield):
+    #    print(f"Element {i}: x = {x}")
+    elem_inflow = elem_farfield[np.where(coordsx_farfield < 0)]
+    elem_outflow = elem_farfield[np.where(coordsx_farfield >= 0)]
 
-    return coords, dims
+    ndim = 2
+    type = 'QUAD'
+    node_count = nx * ny
+    cell_count = nx * (ny-1)
+    block_names = ['fluid']
+    sideset_names = ['airfoil','inflow', 'outflow']
+    sideset_cells = [np.linspace(0,nx-1,nx,dtype=int)+1, 
+                     elem_inflow,
+                     elem_outflow]  # +1 for 1-based indexing in Exodus
+    sideset_sides = [4 * np.ones_like(sideset_cells[0], dtype=int), 
+                     2 * np.ones_like(sideset_cells[1], dtype=int),
+                     2 * np.ones_like(sideset_cells[2], dtype=int)]  # All sides are on the airfoil
+
+    return xyz_2d, conn, sideset_names, sideset_cells, sideset_sides 
+
+def _write_airfoil2d(input_file, output_file=None, flatten=True, debug=False):
+    """ Ganesh implementation """
+    print('--------------------------------------------------------------------')
+    if not flatten:
+        raise NotImplementedError('Not flatten')
+
+    if output_file is None:
+        output_file = os.path.splitext(input_file)[0] + "_GAN.exo"
+        if flatten:
+            output_file = rename_n(output_file, nSpan=1)
+
+    ndim = 2
+    type = 'QUAD'
+    block_names = ['fluid']
+
+    xyz_2d, conn, sideset_names, sideset_cells, sideset_sides = _plt3d_to_quads(input_file)
+
+    if debug:
+        print('Coords 1 ', xyz_2d[0,:])
+        print('Coords 2 ', xyz_2d[1,:])
+        print('Coords -2', xyz_2d[-2,:])
+        print('Coords -1', xyz_2d[-1,:])
+        print('Conn 1 ', conn[0,:] -1)
+        print('Conn 2 ', conn[1,:] -1)
+        print('Conn -2', conn[-2,:]-1)
+        print('Conn -1', conn[-1,:]-1)
+
+    node_count = len(xyz_2d)
+    cell_count = len(conn)
+
+
+    with ExodusIIFile(output_file, mode="w") as exof:
+        exof.put_init('airfoil', ndim, node_count, cell_count,
+                      len(block_names), 0, 3) #len(sideset_names))
+        exof.put_coord(xyz_2d[:,0], xyz_2d[:,1], np.zeros_like(xyz_2d[:,0]))
+        exof.put_coord_names(["X", "Y"])
+        exof.put_element_block(1, 'QUAD', cell_count, 4)
+        exof.put_element_block_name(1, 'Flow-QUAD')
+        exof.put_element_conn(1, conn)
+        # Side sets
+        for i in range(len(sideset_names)):
+            exof.put_side_set_param(i+1, len(sideset_cells[i]))
+            exof.put_side_set_name(i+1, sideset_names[i])
+            exof.put_side_set_sides(i+1, sideset_cells[i], sideset_sides[i])
+    print('Output file:', output_file)
+    print('--------------------------------------------------------------------')
 
 def build_simple_hex_connectivity(dims):
     """
@@ -58,7 +110,7 @@ def build_simple_hex_connectivity(dims):
     Returns:
         conn: (n_hex, 8) array of node indices
     """
-    ni, nj, nk = dims[0]  # Only first block for simplicity
+    ni, nj, nk = dims
     conn = []
     for k in range(nk - 1):
         for j in range(nj - 1):
@@ -74,31 +126,46 @@ def build_simple_hex_connectivity(dims):
                 conn.append([n0, n1, n2, n3, n4, n5, n6, n7])
     return np.array(conn, dtype=int)
 
-def build_simple_quad_connectivity(dims):
+def build_simple_quad_connectivity(dims, loop=True):
     """
     Build a simple quadrilateral connectivity for a single block.
     For Plot3D with dims (ni, nj, nk):
       - ni: number of points along the airfoil (x-y plane)
       - nj: number of points in the z direction (spanwise)
       - nk: number of layers (should be 2 for a single surface)
+
+    INPUTS:
+      - loop: if True, points are assumed to loop (e.g. around an airfoil), and the
+               point connectivity is such that the last point of the loop is not repeated.
     Returns:
         conn: (n_quad, 4) array of node indices
     """
-    ni, nk, nj = dims[0]  # Only first block for simplicity
+    ni, nk, nj = dims
     # This function will build quads between the two j-planes (for each i)
     # For dims=[22,2,6], ni=22, nj=2, nk=6
     # We want quads between j=0 and j=1 for all i, for each k
-    conn = []
-    for j in range(nj-1): # "Layers"
-        for i in range(ni - 1): # Along chord
-            n0 = i     + (j  ) * ni
-            n1 = (i+1) + (j  ) * ni 
-            n2 = (i+1) + (j+1) * ni
-            n3 = i     + (j+1) * ni
-            conn.append([n0, n3, n2, n1])
-    return np.array(conn, dtype=int)
+    conn = np.zeros(((ni-1)*(nj-1),4),dtype=int)
 
-def simplify_coords_for_surface(coords, dims):
+    nii = ni
+    if loop:
+        nii = ni-1
+
+    for j in range(nj-1): # "Layers"
+        for i in range(nii-1): # Along chord
+            n0 = i     + (j  ) * nii
+            n1 = i     + (j+1) * nii
+            n2 = (i+1) + (j+1) * nii
+            n3 = (i+1) + (j  ) * nii 
+            conn[i + j * nii] = [n0, n1, n2, n3]
+
+    if loop:
+        # We need to fix the indices for the points that loops and were not added
+        for j in range(nj-1):
+            conn[(nii-1) + j * nii] = [(nii-1) + j * nii, nii-1 + (j+1) * nii, (j+1) * nii, j * nii]
+
+    return conn
+
+def extract_z_plane(coords, dims, loop=True):
     """
     Given full 3D coords for a Plot3D block with nk=2, extract only the surface (z=0) coordinates
     and return the reduced coordinates and a mapping from (i, j) to the new node indices.
@@ -108,22 +175,26 @@ def simplify_coords_for_surface(coords, dims):
     Returns:
         coords2d: (ni*nj, 2) array (or 3 if you want to keep z=0)
     """
-    ni, nj, nk = dims[0]
-    # Only keep j=0 plane (z=0)
-    coords2d = []
-    j=0
+    ni, nj, nk = dims
+    if loop:
+        nii = ni-1 # coordinates loop, no need to store extra point
+    else:
+        nii = ni
+    j=0 # Only keep j=0 plane (z=0)
+    coords2d = np.zeros((nii*nk, 2))
     for k in range(nk):
-        for i in range(ni):
+        for i in range(nii):
             idx = i + j * ni + k * ni * nj
-            coords2d.append(coords[idx, :2])
-    return np.array(coords2d)
+            coords2d[i + k *nii] = coords[idx, :2]
 
-def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None):
+    return coords2d
+
+def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, inlet_name='inlet', outlet_name='outlet'):
     """
     For a structured quad mesh, find the elements and face indices along the airfoil (first layer) and far-field (last layer).
     Returns a side_sets dict and elem_to_face_nodes mapping.
     """
-    ni, nk, nj = dims[0]
+    ni, nk, nj = dims
     n_elem_i = ni - 1
     n_elem_j = nj - 1
 
@@ -155,7 +226,8 @@ def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inle
     #side_sets[2] = {"elements": farfield_elements, "sides": farfield_sides, "name": "farfield"}
 
     # --- Find inlet and outlet side sets
-    new_side_sets = set_omesh_inlet_outlet_ss(coords, farfield_elements, farfield_sides, elem_to_face_nodes, angle_center, inlet_start, inlet_span, outlet_start, debug=False)
+    new_side_sets = set_omesh_inlet_outlet_ss(coords, farfield_elements, farfield_sides, elem_to_face_nodes, angle_center, inlet_start, inlet_span, outlet_start, debug=False, 
+                                              inlet_name=inlet_name, outlet_name=outlet_name)
     side_sets_list += new_side_sets
     # Create a dictionary for side sets
     side_sets={}
@@ -164,10 +236,16 @@ def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inle
     return side_sets
 
 
-def plt3d_to_exo(input_file, output_file=None, flatten=True, angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, verbose=False, debug=False):
+def plt3d_to_exo(input_file, output_file=None, flatten=True, angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, loop=True,
+                 verbose=False, debug=False, 
+                 block_base='fluid', inlet_name='inlet', outlet_name='outlet'
+                 ):
 
     # Read Plot3D file
     coords, dims = read_plot3d(input_file, verbose=verbose)
+
+    if dims[-1]==1:
+        raise Exception('Last input file dimension needs to be >1.\nInput file dimensions are: {}\nHas mesh been generated? '.format(dims))
 
     if output_file is None:
         output_file = os.path.splitext(input_file)[0] + ".exo"
@@ -179,20 +257,35 @@ def plt3d_to_exo(input_file, output_file=None, flatten=True, angle_center=None, 
         if verbose:
             print("Flattening 3D mesh to 2D surface mesh...")
         # Create a 2D mesh from the 3D coordinates
-        coords = simplify_coords_for_surface(coords, dims)
-        conn =  build_simple_quad_connectivity(dims)
-        block_name = 'fluid-quad'; num_dim=2; elem_type='QUAD'
+        coords = extract_z_plane(coords, dims, loop=loop)
+        conn =  build_simple_quad_connectivity(dims, loop=loop)
+        block_name = block_base+'-QUAD'; num_dim=2; elem_type='QUAD'
 
     else:
         conn = build_simple_hex_connectivity(dims)
-        block_name = 'fluid-hex'; num_dim=3; elem_type='HEX'
+        block_name = block_base+'-HEX'; num_dim=3; elem_type='HEX'
+
+
+    if debug:
+        print('Coords 1 ', coords[0,:])
+        print('Coords 2 ', coords[1,:])
+        print('Coords -2', coords[-2,:])
+        print('Coords -1', coords[-1,:])
+        print('Conn 1 ', conn[0,:] )
+        print('Conn 2 ', conn[1,:] )
+        print('Conn -2', conn[-2,:])
+        print('Conn -1', conn[-1,:])
+
 
     if verbose:
         print("Number of elements:", conn.shape[0], '- nodes per element:', conn.shape[1])
 
-    side_sets = find_side_sets(coords, conn, dims, elem_type=elem_type, angle_center=angle_center, inlet_start=inlet_start, inlet_span=inlet_span, outlet_start=outlet_start)
+    side_sets = find_side_sets(coords, conn, dims, elem_type=elem_type, 
+                               angle_center=angle_center, inlet_start=inlet_start, inlet_span=inlet_span, outlet_start=outlet_start,
+                               inlet_name=inlet_name, outlet_name = outlet_name
+                               )
     conn += 1
-    write_exodus(output_file, coords, conn, verbose=True, side_sets=side_sets, block_name=block_name, num_dim=num_dim)
+    write_exodus(output_file, coords, conn, verbose=True, side_sets=side_sets, block_name=block_name, num_dim=num_dim, title='airfoil')
 
     if debug and flatten:
         n=dims[0][0]
@@ -229,6 +322,9 @@ def plt3d2exo():
     inlet_span = np.radians(args.inlet_span) if args.inlet_span is not None else None
     outlet_start = np.radians(args.outlet_start) if args.outlet_start is not None else None
 
+
+    #_write_airfoil2d(input_file=args.input_file, output_file=args.output_file, flatten=args.flatten, debug=args.debug)
+
     plt3d_to_exo(
         input_file=args.input_file,
         output_file=args.output_file,
@@ -238,8 +334,14 @@ def plt3d2exo():
         inlet_start=inlet_start,
         inlet_span=inlet_span,
         outlet_start=outlet_start,
-        debug=args.debug
+        debug=args.debug,
+        inlet_name='inflow',
+        outlet_name='outflow',
+        block_base='Flow',
+        loop=False,
     )
+
+    # Ganesh
 
 if __name__ == "__main__":
     input_file = 'naca0012_rans_vol.fmt'

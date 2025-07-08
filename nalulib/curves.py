@@ -306,7 +306,9 @@ def contour_orientation(x, y):
     else:
         return 'undetermined'
 
-
+def contour_is_clockwise(coords):
+    area = 0.5 * np.sum(coords[:-1, 0] * coords[1:, 1] - coords[1:, 0] * coords[:-1, 1])
+    return area < 0  # Clockwise if the area is negative
 
 
 def closest_point(x0, y0, x, y):
