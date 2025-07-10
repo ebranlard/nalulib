@@ -142,7 +142,7 @@ class Plot3DFile(File):
 # --------------------------------------------------------------------------------}
 # --- Low level functions 
 # --------------------------------------------------------------------------------{
-def read_plot3d(filename, verbose=False, method='numpy', singleblock=True):
+def read_plot3d(filename, verbose=False, method='numpy', singleblock=False):
     """
     Reads a simple multi-block Plot3D file (formatted, ASCII).
     Returns:

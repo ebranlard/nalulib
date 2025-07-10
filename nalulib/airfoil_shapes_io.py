@@ -45,11 +45,9 @@ def read_airfoil(filename, format=None, **kwargs):
     elif format in ['plot3d','fmt','g','xyz','xy','x']:
         x, y, d = read_airfoil_plot3d(filename)
     elif format in ['pointwise', 'pw','pwise']:
-        x, y, d = read_airfoil_pointwise(filename, plot=True)
+        x, y, d = read_airfoil_pointwise(filename, plot=False)
     else:
         raise  NotImplementedError(f"File type {ext} is not supported.")
-    d['filename'] = filename
-    d['format'] = format
     return x, y, d
 
 def write_airfoil(x, y, filename, format=None, **kwargs):
@@ -126,22 +124,25 @@ def write_airfoil_csv(x, y, filename):
 # --- Plot3D
 # --------------------------------------------------------------------------------{
 def read_airfoil_plot3d(filename):
-
-    coords, dims = read_plot3d(filename)
-    x= coords[:, 0]
+    coords, dims = read_plot3d(filename, singleblock=True)
+    x = coords[:, 0]
     y = coords[:, 1]
+    # Make sure we keep only the first slice in z-direction
+    nx = dims[0]
+    x = x[:nx]
+    y = y[:nx]
     d = {} 
     return x, y, d
-
 
 # --------------------------------------------------------------------------------}
 # --- Pointwise
 # --------------------------------------------------------------------------------{
 def read_airfoil_pointwise(filename, plot=False, verbose=False):
+    # TODO this is horrible code, needs to be refactored
     lower = []
     upper = []
     TE = []
-    section_points = []
+    d= {}
 
     with open(filename, 'r') as file:
         # Read the entire content of the file
@@ -177,47 +178,40 @@ def read_airfoil_pointwise(filename, plot=False, verbose=False):
             
             else:
                 idx += 1  # Skip lines that are not point counts or coordinates
-    lower=lower[1:-1]  # Remove the last point to avoid duplication
-    upper=upper[:-1]  # Remove the last point to avoid duplication
-        
-    lower_x,lower_y = [coord[0] for coord in lower],[coord[1] for coord in lower]
-    upper_x,upper_y = [coord[0] for coord in upper],[coord[1] for coord in upper]
-    TE_x, TE_y = [coord[0] for coord in TE],[coord[1] for coord in TE]
+    TE    = np.asarray(TE)[:,:2]# Keep only x and y coordinates
+    lower = np.asarray(lower)[:,:2] 
+    upper = np.asarray(upper)[:,:2]
 
-    ILower = np.arange(len(lower_x))
-    IUpper = np.arange(len(upper_x))+len(lower_x)
-    ITE = np.arange(len(TE_x))+len(lower_x)+len(upper_x)
-    x = np.concatenate((lower_x, upper_x[:], TE_x[:]))
-    y = np.concatenate((lower_y, upper_y[:], TE_y[:]))
-    if verbose:
-        print('TE_x', TE_x)
-        print('TE_y', TE_y)
+    from nalulib.curves import contour_is_clockwise
+    coords1 = np.vstack((lower[:-1], upper[:-1], TE))
+    assert contour_is_clockwise(coords1), "Pointwise format is expected to be clockwise."
+    assert np.allclose(coords1[0, :], coords1[-1, :], rtol=1e-10, atol=1e-12), "First and last points must be the same in Pointwise format."
 
+    # NOTE: Pointwise is assumed to be clockwise
+    TE = TE[::-1]  # Reverse the order of TE points to match the convention
+    lower = lower[::-1]  # Reverse the order of lower surface points        
+    upper = upper[::-1]  # Reverse the order of upper surface points
+
+    # NOTE: coords are anticlockwise with first and last point being the same
+    coords = np.vstack((upper[:-1], lower[:-1], TE))
+    assert np.allclose(coords[0, :], coords[-1, :], rtol=1e-10, atol=1e-12), "First and last points must be the same in Pointwise format."
 
     if plot:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 5))
-        plt.plot(x, y, '.-', label='Airfoil Shape', color='black')
-        plt.plot(lower_x, lower_y, label='Lower Surface', color='blue')
-        plt.plot(upper_x, upper_y, label='Upper Surface', color='red')
-        plt.plot(TE_x, TE_y, label='Trailing Edge', color='green') 
+        plt.plot(coords[:,0], coords[:,1], '.-', label='Airfoil Shape', color='black')
+        plt.plot(lower[:,0], lower[:,1], label='Lower Surface', color='blue')
+        plt.plot(upper[:,0], upper[:,1], label='Upper Surface', color='red')
+        plt.plot(TE[:,0], TE[:,1], label='Trailing Edge', color='green') 
         plt.title('Airfoil Shape with Upper and Lower Surfaces')
         plt.xlabel('x')
         plt.ylabel('y')
         plt.axis('equal')
         plt.legend()
         plt.grid(True)
+        plt.show()
 
-    d = {}
-    #d['lower'] = lower
-    #d['upper'] = upper
-    #d['TE'] = TE
-    d['ILower'] = ILower
-    d['IUpper'] = IUpper
-    d['ITE']    = ITE
-
-    #return lower_x, lower_y, upper_x, upper_y, TE_x, TE_y
-    return x, y, d 
+    return coords[:,0], coords[:,1], d 
 
 def write_airfoil_pointwise(x, y, output_file):
     # === Load airfoil data ===

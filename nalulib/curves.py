@@ -10,7 +10,7 @@ In particular:
 
 import numpy as np
 import unittest
-_DEFAULT_REL_TOL=0.001
+_DEFAULT_REL_TOL=1e-12
 
 def get_line(x, y, close_it=False):
     if close_it:
@@ -22,7 +22,7 @@ def get_line(x, y, close_it=False):
     return line
     #return np.array([x,y]).T
 
-def curve_coord(x=None, y=None, line=None):
+def curve_coord(x=None, y=None, line=None, normalized=False):
     """ return curvilinear coordinate """
     if line is not None:
         x = line[:,0]
@@ -32,6 +32,8 @@ def curve_coord(x=None, y=None, line=None):
     s     = np.zeros(x.shape)
     s[1:] = np.sqrt((x[1:]-x[0:-1])**2+ (y[1:]-y[0:-1])**2)
     s     = np.cumsum(s)                                  
+    if normalized:
+        s = s/s[-1]  # Normalizing to [0,1]
     return s
 
 
@@ -53,6 +55,11 @@ def curve_extract(line, spacing, offset=None):
     yy=np.interp(sExtract,s,y);
     return np.array([xx,yy]).T
 
+def curve_interp_s(x, y, s_new, normalized=False):
+    s_old = curve_coord(x, y, normalized=normalized)
+    xx = np.interp(s_new, s_old, x)
+    yy = np.interp(s_new, s_old, y)
+    return xx, yy
 
 def curve_interp(x=None, y=None, n=None, s=None, ds=None, line=None, keepOri=False):
     """ Interpolate a curves to equidistant curvilinear space between points
@@ -107,7 +114,7 @@ def curve_interp(x=None, y=None, n=None, s=None, ds=None, line=None, keepOri=Fal
     else:
         raise NotImplementedError()
 
-    # --- Preseve original points if requeted
+    # --- Preseve original points if requested
     if keepOri:
         if ds is not None:
             # Call dedicated function, will maintain equispacing in between original points
@@ -210,79 +217,30 @@ def insert_uniformly(s, s_old, tol=1e-10, thresh=0.2):
 
 
 
+# --------------------------------------------------------------------------------
+# --- Contour querry
+# --------------------------------------------------------------------------------
+def contour_is_closed(x, y, reltol=_DEFAULT_REL_TOL):
+    """ Return true if contour is closed """
+    l = contour_length_scale(x, y)
+    return np.abs(x[0]-x[-1])<l*reltol or np.abs(y[0]-y[-1])<l*reltol
 
-# --------------------------------------------------------------------------------
-# --- Contour tools 
-# --------------------------------------------------------------------------------
-# NOTE: merge with airfoils/shape.py
+def contour_is_clockwise(coords, y=None):
+    if y is None:
+        area = 0.5 * np.sum(coords[:-1, 0] * coords[1:, 1] - coords[1:, 0] * coords[:-1, 1])
+    else:
+        x = coords
+        area = 0.5 * np.sum(x[:-1] * y[1:] - x[1:] * y[:-1])
+    return area < 0  # Clockwise if the area is negative
+
+def contour_is_counterclockwise(coords, y=None):
+    return not contour_is_clockwise(coords, y=y)
 
 def contour_length_scale(x, y):
     """ return representative length scale of contour """
     lx = np.max(x)-np.min(x)
     ly = np.max(y)-np.min(y)
     return  max(lx, ly)
-
-def contour_isClosed(x, y, reltol=_DEFAULT_REL_TOL):
-    """ Return true if contour is closed """
-    l = contour_length_scale(x, y)
-    return np.abs(x[0]-x[-1])<l*reltol or np.abs(y[0]-y[-1])<l*reltol
-
-def contour_remove_duplicates(x, y, reltol=_DEFAULT_REL_TOL):
-    l = contour_length_scale(x, y)
-    unique_points = []
-    duplicate_points = []
-    for x,y in zip(x, y):
-        if all(np.sqrt((x-p[0])**2 + (y-p[1])**2) > reltol*l for p in unique_points):
-            unique_points.append((x,y))
-        else:
-            duplicate_points.append((x,y))
-    x = np.array([p[0] for p in unique_points])
-    y = np.array([p[1] for p in unique_points])
-    return x, y, duplicate_points
-
-def close_contour(x, y, reltol=_DEFAULT_REL_TOL, force=False):
-    """ Close contour, unless it's already closed, alwasys do it if force is True"""
-    x = np.asarray(x)
-    y = np.asarray(y)
-    isClosed = contour_isClosed(x, y, reltol=reltol)
-    if isClosed or force:
-        x = np.append(x, x[0])
-        y = np.append(y, y[0])
-    return x, y
-    
-def reloop_contour(x, y, i):
-    """
-    Reloop a contour array so that it starts at a specific index.
-    NOTE: duplicates should preferably be removed
-    INPUTS:
-    - contour_array: Numpy array of shape (n, 2) representing the contour of point coordinates.
-    - i: Index where the relooped contour should start.
-    OUTPUTS:
-    - Relooped contour array.
-    """
-    #relooped_contour = np.concatenate((contour_array[i:], contour_array[:i]))
-    x2 = np.concatenate((x[i:], x[:i]))
-    y2 = np.concatenate((y[i:], y[:i]))
-    return x2, y2
-
-def opposite_contour(x, y, reltol = _DEFAULT_REL_TOL):
-    """
-    Make a clockwise contour counterclockwise and vice versa
-    INPUTS:
-    - contour_array: Numpy array of shape (n, 2) representing the contour of point coordinates.
-    OUTPUTS:
-    - opposite contour
-    """
-    isClosed = contour_isClosed(x, y, reltol=reltol)
-    if not isClosed:
-        # we close the contour
-        x, y = close_contour(x, y, force=True, reltol=reltol)
-    xopp=x[-1::-1]
-    yopp=y[-1::-1]
-    # If it was not closed, we remove duplicates
-    if not isClosed:
-        xopp, yopp, dupli = contour_remove_duplicates(xopp, yopp, reltol=reltol)
-    return xopp, yopp
 
 def contour_orientation(x, y):
     """
@@ -306,11 +264,6 @@ def contour_orientation(x, y):
     else:
         return 'undetermined'
 
-def contour_is_clockwise(coords):
-    area = 0.5 * np.sum(coords[:-1, 0] * coords[1:, 1] - coords[1:, 0] * coords[:-1, 1])
-    return area < 0  # Clockwise if the area is negative
-
-
 def closest_point(x0, y0, x, y):
     """ return closest point to curve and index"""
     i = np.argmin((x - x0)**2 + (y - y0)**2)
@@ -331,7 +284,6 @@ def find_closest(X, Y, point, xlim=None, ylim=None):
     norm2 = ((X-point[0])**2)/x_scale + ((Y-point[1])**2)/y_scale
     ind = np.argmin(norm2, axis=0)
     return X[ind], Y[ind], ind
-
 
 def point_in_contour(X, Y, contour, method='ray_casting'):
     """
@@ -408,6 +360,265 @@ def point_in_contour(X, Y, contour, method='ray_casting'):
             Bf[i] = __p_in_c_ray(x, y, contour)
     B =  Bf.reshape(shape_in)
     return B
+
+# --------------------------------------------------------------------------------
+# --- Contour Actions
+# --------------------------------------------------------------------------------
+def contour_remove_duplicates(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+    l = contour_length_scale(x, y)
+    unique_points = []
+    duplicate_points = []
+    for x,y in zip(x, y):
+        if all(np.sqrt((x-p[0])**2 + (y-p[1])**2) > reltol*l for p in unique_points):
+            unique_points.append((x,y))
+        else:
+            duplicate_points.append((x,y))
+    x = np.array([p[0] for p in unique_points])
+    y = np.array([p[1] for p in unique_points])
+
+    if verbose:
+        if len(duplicate_points)>0:
+            print('[INFO] curves: {} duplicate(s) removed: {}'.format(len(duplicate_points), duplicate_points))
+
+    return x, y, duplicate_points
+
+
+def open_contour(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+    """ Open contour, removing last point if it is the same as the first one, unless it's already open."""
+    if contour_is_closed(x, y, reltol=reltol):
+        if verbose:
+            print('[INFO] curves: Contour closed, removing last point to open it.')
+        x = x[:-1]
+        y = y[:-1]
+    return x, y
+
+def close_contour(x, y, reltol=_DEFAULT_REL_TOL, force=False, verbose=False):
+    """ Close contour, unless it's already closed, always do it if force is True"""
+    x = np.asarray(x)
+    y = np.asarray(y)
+    isClosed = contour_is_closed(x, y, reltol=reltol)
+    if isClosed or force:
+        x = np.append(x, x[0])
+        y = np.append(y, y[0])
+        if verbose:
+            print('[INFO] curves: Contour was open, closing it.')
+    return x, y
+    
+def reloop_contour(x, y, i, verbose=False):
+    """
+    Reloop a contour array so that it starts at a specific index.
+    NOTE: duplicates should preferably be removed
+    INPUTS:
+    - contour_array: Numpy array of shape (n, 2) representing the contour of point coordinates.
+    - i: Index where the relooped contour should start.
+    OUTPUTS:
+    - Relooped contour array.
+    """
+    #relooped_contour = np.concatenate((contour_array[i:], contour_array[:i]))
+    if i!=0:
+        if verbose:
+            print("[INFO] curves: Relooping contour to start from index {}".format(i))
+        x = np.concatenate((x[i:], x[:i]))
+        y = np.concatenate((y[i:], y[:i]))
+    return x, y
+
+def opposite_contour(x, y, reltol = _DEFAULT_REL_TOL):
+    """
+    Make a clockwise contour counterclockwise and vice versa
+    INPUTS:
+    - contour_array: Numpy array of shape (n, 2) representing the contour of point coordinates.
+    OUTPUTS:
+    - opposite contour
+    """
+    isClosed = contour_is_closed(x, y, reltol=reltol)
+    if not isClosed:
+        # we close the contour
+        x, y = close_contour(x, y, force=True, reltol=reltol)
+    xopp=x[-1::-1]
+    yopp=y[-1::-1]
+    # If it was not closed, we remove duplicates
+    if not isClosed:
+        xopp, yopp, dupli = contour_remove_duplicates(xopp, yopp, reltol=reltol)
+    return xopp, yopp
+
+def counterclockwise_contour(x, y, verbose=False):
+    if contour_orientation(x, y) != 'counterclockwise':
+        x = x[::-1]
+        y = y[::-1]
+        if verbose:
+            print("[INFO] curves: Making contour counterclockwise.")
+        return x, y
+    else:
+        return x, y
+
+def clockwise_contour(x, y, verbose=False):
+    if contour_orientation(x, y) != 'clockwise':
+        x = x[::-1]
+        y = y[::-1]
+        if verbose:
+            print("[INFO] curves: Making contour clockwise.")
+        return x, y
+    else:
+        return x, y
+
+def curve_enforce_superset(x_orig, y_orig, x_new, y_new, verbose=False, raiseError=False, reltol=_DEFAULT_REL_TOL):
+    """
+    Ensure that all original points (x_orig, y_orig) are present in the refined grid (x_new, y_new).
+    If a point is missing (not within tolerance), replace the closest refined point with the original.
+    Returns corrected x_new, y_new arrays.
+    """
+    ds = np.sqrt(np.diff(x_orig)**2 + np.diff(y_orig)**2)
+    tol = np.min(ds) * reltol if len(ds) > 0 else 1e-12
+    n_fixed = 0
+    for i, (xo, yo) in enumerate(zip(x_orig, y_orig)):
+        dists = np.sqrt((x_new - xo)**2 + (y_new - yo)**2)
+        min_idx = np.argmin(dists)
+        if dists[min_idx] > tol:
+            if verbose:
+                print(f"[WARN] curves: Point {i} (x={xo:.5f}, y={yo:.5f}) not found in refined grid (min dist={dists[min_idx]:.2e}). Replacing closest point.")
+            x_new[min_idx] = xo
+            y_new[min_idx] = yo
+            n_fixed += 1
+    if verbose:
+        if n_fixed>0:
+            if verbose:
+                print(f"[WARN] curves: Total points replaced: {n_fixed} / {len(x_orig)}")
+            if raiseError:
+                raise ValueError(f"Some original points were not found in the refined grid. {n_fixed} points replaced.")
+    return x_new, y_new
+
+
+def curve_check_superset(x_orig, y_orig, x_new, y_new, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=False):
+    """
+    Check whether all points (x_orig, y_orig) are present in (x_new, y_new) within a given tolerance.
+    Returns True if all original points are found in the new curve, False otherwise.
+    """
+    x_orig = np.asarray(x_orig)
+    y_orig = np.asarray(y_orig)
+    x_new = np.asarray(x_new)
+    y_new = np.asarray(y_new)
+
+    ds = np.sqrt(np.diff(x_orig)**2 + np.diff(y_orig)**2)
+    tol = np.min(ds) * reltol if len(ds) > 0 else 1e-12
+
+    all_found = True
+    for i, (xo, yo) in enumerate(zip(x_orig, y_orig)):
+        dists = np.sqrt((x_new - xo)**2 + (y_new - yo)**2)
+        min_dist = np.min(dists)
+        if min_dist > tol:
+            all_found = False
+            if verbose:
+                print(f"[FAIL] curves: Point {i} (x={xo:.5f}, y={yo:.5f}) not found in new curve (min dist={min_dist:.2e})")
+    if not all_found:
+        if verbose:
+            print("[FAIL] curves: Some original points were not found in the new curve.")
+        if raiseError:
+            raise ValueError("Some original points were not found in the new curve.")
+    return all_found   
+
+# --------------------------------------------------------------------------------}
+# --- Contours normals
+# --------------------------------------------------------------------------------{
+def compute_normals_looped(coords):
+    input_is_looped = np.allclose(coords[0], coords[-1])
+    if input_is_looped:
+        open_loop = coords[:-1]  # Exclude the last point to avoid duplication
+    else:
+        open_loop = coords
+
+    prev = np.roll(open_loop, 1, axis=0)  # Shifted back by 1
+    curr = np.roll(open_loop, 0, axis=0)  
+    next = np.roll(open_loop, -1, axis=0)  # Shifted forward by 1
+
+    # Compute tangents at midpoints
+    tangents_mid = next - curr
+    tangents_mid /= np.linalg.norm(tangents_mid, axis=1)[:, np.newaxis]  # Normalize tangents
+
+    # Rotate tangents by -90 degrees to get outward normals at midpoints
+    normals_mid = np.zeros_like(tangents_mid)
+    normals_mid[:, 0] = tangents_mid[:, 1]
+    normals_mid[:, 1] = -tangents_mid[:, 0]
+
+    # Initialize normals at each point
+    normals = np.zeros_like(coords)
+    normals[0] = 0.5 * (normals_mid[0] + normals_mid[-1])
+    if input_is_looped:
+        # Average normals between midpoints
+        normals[1:-1] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
+        normals[-1] = normals[0]
+    else:
+        normals[1:] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
+
+    epsilon = 1e-10  # Small value to prevent division by zero
+    normals /= (np.linalg.norm(normals, axis=1)[:, np.newaxis] + epsilon)
+
+    return normals, normals_mid
+
+def compute_normals(coords, is_loop=False):
+    """
+    Compute the normals at each point of the airfoil and the midpoints.
+    Normals are averaged between midpoints to ensure smooth transitions.
+    """
+    if is_loop:
+        return compute_normals_looped(coords)
+    
+    # --- Normals for non-looped
+    # Compute tangents at midpoints
+    tangents_mid = coords[1:] - coords[:-1]
+    tangents_mid /= np.linalg.norm(tangents_mid, axis=1)[:, np.newaxis]  # Normalize tangents
+
+    # Rotate tangents by -90 degrees to get outward normals at midpoints
+    normals_mid = np.zeros_like(tangents_mid)
+    normals_mid[:, 0] = tangents_mid[:, 1]
+    normals_mid[:, 1] = -tangents_mid[:, 0]
+
+    # Initialize normals at each point
+    normals = np.zeros_like(coords)
+
+    # Average normals between midpoints
+    normals[1:-1] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
+
+    # Handle the first and last points
+    normals[0] = normals_mid[0]  # First point normal
+    normals[-1] = normals_mid[-1]  # First point normal
+
+    # Normalize the averaged normals
+    epsilon = 1e-10  # Small value to prevent division by zero
+    normals /= (np.linalg.norm(normals, axis=1)[:, np.newaxis] + epsilon)
+
+    return normals, normals_mid
+
+def smooth_normals(normals, iterations=5, alpha=0.5, boundary_weight=0.8, is_loop=True):
+    """
+    Smooth normals using a weighted average scheme.
+    At the boundaries (trailing edge), apply a forward and backward scheme
+    to lean the normals towards the first normal.
+    Args:
+        normals (np.ndarray): Array of normals to smooth.
+        iterations (int): Number of smoothing iterations.
+        alpha (float): Smoothing factor (0 < alpha < 1).
+        boundary_weight (float): Weight for the boundary normals (0 < boundary_weight <= 1).
+    Returns:
+        np.ndarray: Smoothed normals.
+    """
+    if not is_loop:
+        raise ValueError("Smoothing is only implemented for looped normals.")
+    smoothed = normals.copy()
+    for _ in range(iterations):
+        prev = np.roll(smoothed, -1, axis=0)  # Shifted back by 1
+        next = np.roll(smoothed, 1, axis=0)  # Shifted back by 1
+        smoothed = alpha * (prev+next) + (1 - 2 * alpha) * smoothed
+    #    # Smooth interior points
+    #    smoothed[1:-1] = alpha * (smoothed[:-2] + smoothed[2:]) + (1 - 2 * alpha) * smoothed[1:-1]
+    #    # Forward scheme at the first point (trailing edge)
+    #    #smoothed[0] = boundary_weight * smoothed[0] + (1 - boundary_weight) * smoothed[1]
+    #    smoothed[0] = boundary_weight * smoothed[0] + (1 - boundary_weight) * smoothed[1]
+    #    # Backward scheme at the last point (trailing edge)
+    #    smoothed[-1] = boundary_weight * smoothed[-1] + (1 - boundary_weight) * smoothed[-2]
+    #    # Ensure the first and last normals remain consistent
+    #    smoothed[0] = smoothed[-1] = 0.5 * (smoothed[0] + smoothed[-1])
+    return smoothed
+
 
 
 # --------------------------------------------------------------------------------}
@@ -570,6 +781,29 @@ class TestCurves(unittest.TestCase):
         xx,yy=curve_interp(x,y,1)
         np.testing.assert_equal(xx,x[0])
         np.testing.assert_equal(yy,y[0])
+    
+    def test_contour_querries(self):
+        # diamond counter clockwise
+        x = np.array([1, 0.5, 0, 0.5, 1])
+        y = np.array([0, 1, 0, -1, 0])
+        # --- Closed
+        self.assertTrue(contour_is_closed(x, y))    
+        # --- Counter Clockwise
+        self.assertEqual(contour_orientation(x, y), "counterclockwise")
+        self.assertTrue(contour_is_counterclockwise(x, y))
+        self.assertFalse(contour_is_clockwise(x, y))
+
+    def test_contour_manip(self):
+        # diamond counter clockwise
+        x = np.array([1, 0.5, 0, 0.5, 1])
+        y = np.array([0, 1, 0, -1, 0])
+
+        x1, y1 = clockwise_contour(x, y)
+        self.assertEqual(contour_orientation(x1, y1), "clockwise")
+        x2, y2 = counterclockwise_contour(x1, y1)
+        self.assertEqual(contour_orientation(x2, y2), "counterclockwise")
+        np.testing.assert_array_equal(x, x2)
+        np.testing.assert_array_equal(y, y2)
 
 
 # --------------------------------------------------------------------------------}
@@ -599,7 +833,7 @@ def example_streamquiver():
 
 
 if __name__ == "__main__":
-    TestCurves().test_curv_interp()
-#     unittest.main()
+    #TestCurves().test_curv_interp()
+    unittest.main()
 
 

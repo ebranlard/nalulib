@@ -1,11 +1,559 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import inspect
 
-from nalulib.curves import contour_is_clockwise as is_clockwise 
+# Local
+
+from nalulib.curves import contour_is_closed
+from nalulib.curves import contour_is_clockwise
+from nalulib.curves import contour_is_counterclockwise
+from nalulib.curves import counterclockwise_contour
+from nalulib.curves import close_contour
+from nalulib.curves import open_contour
+from nalulib.curves import contour_orientation
+from nalulib.curves import contour_remove_duplicates
+from nalulib.curves import find_closest
+from nalulib.curves import opposite_contour
+from nalulib.curves import reloop_contour
+from nalulib.curves import curve_interp_s
+from nalulib.curves import curve_interp
+from nalulib.curves import curve_coord
+from nalulib.curves import curve_enforce_superset
+
+from scipy.interpolate import interp1d
+from scipy.interpolate import splprep, splev
+
+_DEFAULT_REL_TOL=0.000001
+
+# --------------------------------------------------------------------------------}
+# --- Airfoil coordinates using various methods 
+# --------------------------------------------------------------------------------{
+def airfoil_get_xy(airfoil_coords_wrap, format=None, **kwargs):
+    coords = np.asarray(airfoil_coords_wrap)
+    if isinstance(airfoil_coords_wrap, str):
+        basename = airfoil_coords_wrap
+        name, ext = os.path.splitext(basename)
+        #print(f'name {name} ext{ext}')
+        if len(ext)==0:
+            return airfoil_get_xy_by_string(basename, **kwargs)
+        else:
+            return airfoil_get_xy_by_file(basename, format=format)
+
+    elif len(coords.shape)==2 and coords.shape[0] == 2:
+        x = coords[0]
+        y = coords[1]
+    elif len(coords.shape)==2 and coords.shape[1] == 2:
+        x = coords[:,0]
+        y = coords[:,1]
+    else:
+        raise NotImplementedError()
+
+    return x, y
+
+def airfoil_get_xy_by_string(name, **kwargs):
+    name = name.lower()
+    if name.startswith('naca'):
+        from nalulib.airfoil_shapes_naca import naca_shape
+        # extract digits from the name
+        digits = ''.join(filter(str.isdigit, name))
+        naca_params = inspect.signature(naca_shape).parameters
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in naca_params}
+        if len(digits) == 4:
+            x, y = naca_shape(digits, **filtered_kwargs)
+        else:
+            raise NotImplementedError(f"NACA shape with {len(digits)} digits is not supported: {name}") 
+    elif name.startswith('diamond'):
+        x = np.array([1, 0.5, 0, 0.5, 1])
+        y = np.array([0, 1, 0, -1, 0])
+        return x, y
+    else:
+        raise NotImplementedError()
+    return x, y
+
+def airfoil_get_xy_by_file(filename, format=None):
+    from nalulib.airfoil_shapes_io import read_airfoil
+    x, y, _ = read_airfoil(filename, format=format)
+    return x, y
+
+# --------------------------------------------------------------------------------}
+# --- Airfoil Geometry
+# --------------------------------------------------------------------------------{
+def normalize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    # Printing info to screen
+    if verbose:
+        print('[INFO] input airfoil is closed:           ', contour_is_closed(x, y, reltol=reltol))
+        print('[INFO] input airfoil is counterclockwise: ', contour_is_counterclockwise(x, y))
+
+    # At first remove last point if same as the first point
+    x, y = open_contour(x, y, reltol=reltol, verbose=verbose)
+
+    # Remove duplicates
+    x, y, duplicates = contour_remove_duplicates(x, y, reltol=reltol, verbose=verbose)
+
+    # Ensure counterclockwise order
+    x, y = counterclockwise_contour(x, y, verbose=verbose)
+
+    # reloop so that first point is upper TE point
+    IXmax = np.where(x == np.max(x))[0]
+    iiymax = np.argmax(y[IXmax])
+    iUpperTE = IXmax[iiymax]
+    x, y = reloop_contour(x, y, iUpperTE, verbose=verbose)
+
+    # At the end, close the contour
+    x, y = close_contour(x, y, force=True, verbose=verbose)
+
+    return x, y
+
+def airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True):
+    """
+    Checks if airfoil coordinates x, y are properly normalized according to normalized_airfoil_coords convention:
+      - Contour is closed
+      - Contour is counterclockwise
+      - First point is the upper TE point (max x, max y)
+    Returns True if all checks pass, False otherwise.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    checks = []
+    #if not contour_is_closed(x, y, reltol=reltol):
+    checks.append(contour_is_closed(x, y, reltol=reltol))
+    if not checks[-1]:
+        if raiseError:
+            raise Exception("Airfoil contour should be closed, but it is not. Use close_contour() to close it.")
+        if verbose:
+            print("[is_normalized_airfoil_coords] Contour is not closed.")
+
+    checks.append(contour_is_counterclockwise(x, y))
+    if not checks[-1]:
+        if raiseError:
+            raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
+        if verbose:
+            print("[is_normalized_airfoil_coords] Contour is not counterclockwise.")
+
+    # First point is upper TE (max x, max y among max x)
+    IXmax = np.where(x == np.max(x))[0]
+    iiymax = np.argmax(y[IXmax])
+    iUpperTE = IXmax[iiymax]
+    checks.append(iUpperTE == 0)
+    if not checks[-1]:
+        if raiseError:
+            raise Exception(f"First point is not upper TE (index {iUpperTE}).")
+        if verbose:
+            print(f"[is_normalized_airfoil_coords] First point is not upper TE (index {iUpperTE}).")
+
+    return all(checks)
+
+
+def airfoil_TE_type(x, y, closed=True):
+    """ Detects the type of trailing edge (TE) of an airfoil contour."""
+    if closed:
+        nSharp=2
+    else:
+        nSharp=1
+    # --- Find TE points
+    IXmax = np.where(x == np.max(x))[0]
+    if len(IXmax) == nSharp:
+        # TODO cusps, based on y
+        return 'sharp'
+    elif len(IXmax) >= nSharp+1:
+        return 'blunt'
+    else:
+        raise ValueError("No trailing edge found in the airfoil coordinates.")
+
+def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+    """
+    Split an airfoil contour into upper and lower surfaces, and find leading edge (LE) and trailing edge (TE) indices.
+    This assumes that the contour is closed and counterclockwise.
+    """
+    # Ensure contour is open and counterclockwise
+    if not contour_is_closed(x, y, reltol=reltol):
+        raise Exception("Airfoil contour should be closed, but it is not. Use close_contour() to close it.")
+    if not contour_is_counterclockwise(x, y):
+        raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
+    
+    # --- TE indices
+    # From lower TE to upper TE (if blunt). Upper TE should always be 0
+    # 2 points if sharp TE, 3 or more if blunt TE
+    IXmax = np.where(x == np.max(x))[0]
+    ITE = np.concatenate((IXmax[1:], [IXmax[0]]))
+    #print('>>> ITE indices:', ITE)
+    assert ITE[-1] == 0, "Last TE index should be 0, but got {}".format(ITE[-1])
+    assert ITE[-2] == len(x)-1, "Second last TE index should be the last point, but got {}".format(ITE[-2])
+
+    # --- Find LE point
+    IXmin = np.where(x == np.min(x))[0]
+    if len(IXmin) == 1:
+        iLE = IXmin[0]
+    elif len(IXmin) == 2:
+        print('[WARN] Two leading edge points found, using the first one.')
+        iLE = IXmin[0]
+    else:
+        raise ValueError("{} leading edge found in the airfoil coordinates.".format(len(IXmin)))
+
+    # --- Surfaces
+    IUpper = np.arange(0, iLE+1) # Counterclockwise, include TE and LE
+    ILower = np.arange(iLE, ITE[0]+1) # Counterclockwise, include LE and TE
+
+    IAll = np.concatenate((IUpper[:-1], ILower[:-1], ITE[:-1]))
+    assert np.all(IAll == np.arange(len(x))), "Indices do not match the length of x and y arrays."
+
+    return IUpper, ILower, ITE, iLE
+
+# --- OLD LEGACY FUNCTIONS
+def reindex_starting_from_te(coords, TE_indices):
+    raise Exception('reindex_starting_from_te is deprecated, use airfoil_TE_type() instead.')
+    x, y = reloop_contour(coords[:,0], coords[:,1], TE_indices[0])
+    return 
+
+def detect_airfoil_te_type(coords):
+    raise Exception('detect_airfoil_te_type() is deprecated, use airfoil_TE_type() instead.')
+    x,y = coords[:,0], coords[:,1]
+    IXmax = np.where(x == np.max(x))[0]
+    return airfoil_TE_type(x, y, closed=True), IXmax
+
+def detect_airfoil_features(coords):
+    raise Exception('detect_airfoil_features() is deprecated, use airfoil_split_surfaces instead.')
+    indices = { "trailing_edge": ITE, "leading_edge": iLE, "upper_surface": IUpper, "lower_surface": ILower}
+    return trailing_edge_type, indices
+
+
+# --------------------------------------------------------------------------------}
+# --- Airfoil Remeshing
+# --------------------------------------------------------------------------------{
+def cosine_spacing_s(n, reverse=False):
+    """
+    Returns n indices spaced according to cosine spacing (0 at LE, 1 at TE).
+    If reverse=True, flips the order.
+    """
+    beta = np.linspace(0, np.pi, n)
+    s = 0.5 * (1 - np.cos(beta)) # Cosine spacing from 0 to 1
+    if reverse:
+        s = s[::-1]
+    return s
+
+def hyperbolic_tangent_spacing_s(n, a=2.5, reverse=False):
+    """
+    Returns n indices spaced according to hyperbolic tangent spacing (0 at LE, 1 at TE).
+    'a' controls clustering: higher a = more clustering at ends.
+    If reverse=True, flips the order.
+    """
+    t = np.linspace(0, 1, n)
+    s = 0.5 * (1 + np.tanh(a * (t - 0.5)) / np.tanh(a / 2))
+    if reverse:
+        s = s[::-1]
+    return s
+
+def resample_airfoil(x, y, IUpper, ILower, ITE, interp_upper, interp_lower, interp_te=None):
+    """
+    Generic airfoil resampling function.
+    Allows custom interpolation functions for upper, lower, and TE surfaces.
+    Each interp_* function should have the signature:
+        interp(x, y) -> x_new, y_new
+    """
+    # Upper surface
+    xu, yu = x[IUpper], y[IUpper]
+    xu2, yu2 = interp_upper(xu, yu)
+    xu2[0], yu2[0] = xu[0], yu[0]
+    # Lower surface
+    xl, yl = x[ILower], y[ILower]
+    xl2, yl2 = interp_lower(xl, yl)
+    # TE 
+    x_te, y_te = x[ITE][:-1], y[ITE][:-1]
+    if interp_te is not None and len(ITE) > 2:
+        x_te_new, y_te_new = interp_te(x_te, y_te)
+
+    else:
+        x_te_new, y_te_new = x_te, y_te # No interpolation for TE if sharp
+
+    x_new = np.concatenate([xu2[:-1], xl2[:-1], x_te_new[:-1], [xu2[0]] ])
+    y_new = np.concatenate([yu2[:-1], yl2[:-1], y_te_new[:-1], [yu2[0]] ])
+
+    return x_new, y_new
+
+def resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul, interp_te=None):
+    """
+    Generic airfoil resampling function.
+    Allows custom interpolation functions for upper+lower, and TE surfaces.
+    Each interp_* function should have the signature:
+        interp(x, y) -> x_new, y_new
+    """
+    # Upper + Lower surface
+    xu, yu = x[IUpper], y[IUpper]
+    xl, yl = x[ILower], y[ILower]
+    xul = np.concatenate([xu, xl[1:]])
+    yul = np.concatenate([yu, yl[1:]])
+    if interp_ul is not None:
+        x_new, y_new = interp_ul(xul, yul)
+        # Safety
+        x_new[0], y_new[0] = xul[0], yul[0]
+        x_new[-1], y_new[-1] = xul[-1], yul[-1]
+    else:
+        x_new, y_new = xul, yul
+    
+    # TE 
+    x_te, y_te = x[ITE][:-1], y[ITE][:-1]
+    if interp_te is not None and len(ITE) > 2:
+        x_te_new, y_te_new = interp_te(x_te, y_te)
+    else:
+        x_te_new, y_te_new = x_te, y_te  # No interpolation for TE if sharp
+
+    x_new = np.concatenate([x_new[:-1], x_te_new[:-1], [x_new[0]] ])
+    y_new = np.concatenate([y_new[:-1], y_te_new[:-1], [y_new[0]] ])
+
+    return x_new, y_new
+
+def resample_airfoil_refine(x, y, IUpper, ILower, ITE, factor_surf=2, factor_te=1):
+    """
+    Refine the airfoil grid by increasing the number of points by a given factor,
+    preserving the original points (all original points are included in the output).
+    The new points are inserted between the originals using cubic spline interpolation
+    for the main contour and linear interpolation for the TE.
+    Returns new x, y arrays (closed, counterclockwise).
+    """
+
+    if factor_surf >1:
+        def interp_ul(xul, yul):
+            # Parameterize by cumulative chordwise distance
+            s = curve_coord(xul, yul, normalized=True)
+            n_orig = len(xul)
+            # Subdivide each segment into factor_surf parts
+            s_new = []
+            for i in range(n_orig - 1):
+                s_sub = np.linspace(s[i], s[i+1], factor_surf + 1)[:-1]  # exclude last to avoid duplicates
+                s_new.extend(s_sub)
+            s_new.append(s[-1])  # add the last point
+            s_new = np.array(s_new)
+            tck, _ = splprep([xul, yul], u=s, s=0, k=min(3, n_orig-1))
+            x_new, y_new = splev(s_new, tck) # return x_new, y_new
+            x_new, y_new = curve_enforce_superset(xul, yul, x_new, y_new, verbose=False, raiseError=False)
+            return x_new, y_new
+    else:
+        interp_ul = None
+
+    if factor_te > 1:
+        def interp_te(xte, yte):
+            if len(xte) < 2:
+                return xte, yte
+            s = curve_coord(xte, yte, normalized=True)
+            n_orig = len(xte)
+            # Subdivide each segment into factor_surf parts
+            s_new = []
+            for i in range(n_orig - 1):
+                s_sub = np.linspace(s[i], s[i+1], factor_te + 1)[:-1]  # exclude last to avoid duplicates
+                s_new.extend(s_sub)
+            s_new.append(s[-1])  # add the last point
+            s_new = np.array(s_new)
+            # Linear interpolation
+            fx = interp1d(s, xte, kind='linear')
+            fy = interp1d(s, yte, kind='linear')
+            x_new, y_new = fx(s_new), fy(s_new)
+            x_new, y_new = curve_enforce_superset(xte, yte, x_new, y_new, verbose=True, raiseError=True)
+            return x_new, y_new
+    else:
+        interp_te = None
+
+    x_new, y_new = resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul=interp_ul, interp_te=interp_te)
+    return x_new, y_new
+
+
+# KEEP ME FOR NOW:
+
+def resample_airfoil_hyperbolic(x, y, IUpper, ILower, ITE, n_surf=80, a_surf=2.5, interp_te=None):
+    """
+    Resample upper, lower, and TE surfaces with hyperbolic tangent and constant spacing.
+    Returns new x, y arrays (closed, counterclockwise).
+    """
+    interp_upper = lambda x_, y_: curve_interp_s(x_, y_, s_new=hyperbolic_tangent_spacing_s(n_surf, a=a_surf), normalized=True)
+    interp_lower = interp_upper
+    x_new, y_new = resample_airfoil(x, y, IUpper, ILower, ITE, interp_upper, interp_lower, interp_te)  
+
+    return x_new, y_new
+
+def resample_airfoil_cosine(x, y, IUpper, ILower, ITE, n_surf=80, interp_te=None):
+    """
+    Resample upper, lower, and TE surfaces with cosine and constant spacing.
+    Returns new x, y arrays (closed, counterclockwise).
+    """
+    interp_upper = lambda x_, y_: curve_interp_s(x_, y_, s_new=cosine_spacing_s(n_surf), normalized=True)
+    interp_lower = interp_upper
+    x_new, y_new = resample_airfoil(x, y, IUpper, ILower, ITE, interp_upper, interp_lower, interp_te)  
+
+    return x_new, y_new
+
+def resample_airfoil_spline(x, y, IUpper, ILower, ITE, n_surf=1000, kind='cubic', interp_te=None):
+    """
+    Resample upper and lower surfaces using spline interpolation (default cubic).
+    The TE is not modified: it is appended at the end (constant spacing or original).
+    Returns new x, y arrays (closed, counterclockwise).
+    """
+
+    def interp_ul(xul, yul):
+        # Parameterize by cumulative chordwise distance
+        u = curve_coord(xul, yul, normalized=True)
+        # Spline fit
+        tck, _ = splprep([xul, yul], u=u, s=0, k=3 if kind == 'cubic' else 1)
+        u_new = np.linspace(0, 1, 2 * n_surf)
+        return splev(u_new, tck)
+
+    x_new, y_new = resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul, interp_te)  
+
+    return x_new, y_new
+
+
+
+
+
+
+# --------------------------------------------------------------------------------}
+# --- CFD checks
+# --------------------------------------------------------------------------------{
+def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
+    """
+    Checks if the airfoil surface mesh satisfies IDDES surface resolution criteria.
+
+    Parameters:
+        x, y: arrays of surface coordinates (ordered CCW, first point upper TE)
+        IUpper: indices of upper surface
+        ILower: indices of lower surface
+        ITE: indices defining the blunt trailing edge
+        Re: Reynolds number (default 1e6)
+    """
+    c = np.max(x)-np.min(x) # chord length
+
+    # Rule of thumb criteria 
+    ds_min = c / 3000  # ~0.00033
+    ds_max = c / 200   # ~0.005
+    expansion_ratio_limit = 1.2
+
+    # ------------- Helper for surface checks -------------
+    def check_surface(ds, label):
+        min_ds = ds.min()
+        max_ds = ds.max()
+        print(f"{label}: min ds = {min_ds:.5f}, max ds = {max_ds:.5f}")
+        if min_ds >= ds_min:
+            print(f"✅ {label} minimum spacing OK.")
+        else:
+            print(f"❌ {label} minimum spacing too small.")
+        if max_ds <= ds_max:
+            print(f"✅ {label} maximum spacing OK.")
+        else:
+            print(f"❌ {label} maximum spacing too large.")
+
+        # Expansion ratio check:
+        ratios = ds[1:] / ds[:-1]
+        max_ratio = np.max(ratios)
+        min_ratio = np.min(ratios)
+        print(f"{label}: max expansion ratio = {max_ratio:.3f}, min expansion ratio = {min_ratio:.3f}")
+        if max_ratio <= expansion_ratio_limit:
+            print(f"✅ {label} expansion ratio OK.")
+        else:
+            print(f"❌ {label} expansion ratio too large, consider smoothing.")
+
+    # ---------------- Upper/Lower surfaces --------------
+    xu, yu = x[IUpper], y[IUpper]
+    xl, yl = x[ILower], y[ILower]
+    dsu = np.sqrt(np.diff(xu)**2 + np.diff(yu)**2)
+    dsl = np.sqrt(np.diff(xl)**2 + np.diff(yl)**2)
+    check_surface(dsu, "Upper surface")
+    check_surface(dsl, "Lower surface")
+
+    # ---------------- Blunt Trailing Edge ----------------
+    if len(ITE) >= 2:
+        xTE = x[ITE]
+        yTE = y[ITE]
+        h_TE = np.abs(yTE.max() - yTE.min())
+        ds_TE_crit_min = h_TE / 10
+        ds_TE_crit_max = h_TE / 5
+        dsTE = np.sqrt(np.diff(xTE)**2 + np.diff(yTE)**2)
+        min_dsTE = dsTE.min()
+        max_dsTE = dsTE.max()
+        print(f"Blunt TE: min ds = {min_dsTE:.5f}, max ds = {max_dsTE:.5f}, h_TE = {h_TE:.5f}")
+        if min_dsTE <= ds_TE_crit_min:
+            print("✅ Blunt TE minimum spacing OK.")
+        else:
+            print("❌ Blunt TE minimum spacing too large.")
+        if max_dsTE <= ds_TE_crit_max:
+            print("✅ Blunt TE maximum spacing OK.")
+        else:
+            print("❌ Blunt TE maximum spacing too large.")
+
+        # Expansion ratio for TE:
+        ratios_TE = dsTE[1:] / dsTE[:-1]
+        max_ratio_TE = np.max(ratios_TE)
+        min_ratio_TE = np.min(ratios_TE)
+        print(f"Blunt TE: max expansion ratio = {max_ratio_TE:.3f}, min expansion ratio = {min_ratio_TE:.3f}")
+        if max_ratio_TE <= expansion_ratio_limit:
+            print("✅ Blunt TE expansion ratio OK.")
+        else:
+            print("❌ Blunt TE expansion ratio too large, consider smoothing.")
+    else:
+        print("🔹 Sharp TE")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ---------------------------------------------------------------------------
-# --- Airfoil library
+# --- Plot  Airfoil library
+# ---------------------------------------------------------------------------
+def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None, simple=False, sty='k.-'):
+    """ Plot airfoil coordinates if normalized using airfoil_normalize_coords()."""
+    airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
+
+    IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False)
+    xu,  yu  = x[IUpper], y[IUpper]      
+    xl,  yl  = x[ILower], y[ILower]
+    xTE, yTE = x[ITE]   , y[ITE]
+    xLE, yLE = x[iLE]   , y[iLE]
+
+    """ Plot coordinates of an airfoil contour in normalized coordinates."""
+    if ax is None:
+        fig,ax = plt.subplots(1, 1, sharey=False, figsize=(12.8,4.0)) # (6.4,4.8)
+        fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+
+    # Main plot
+    ax.plot(x, y, sty, label=label)
+
+    if not simple:
+        ax.plot(xu , yu,   '-o', label='Upper surface', markerfacecolor='none', markersize=8)
+        ax.plot(xl , yl,   '-d', label='Lower surface', markerfacecolor='none', markersize=7)     
+        ax.plot(xTE, yTE, '-x', label='Trailing edge', markerfacecolor='none', markersize=6)
+        ax.plot(xLE, yLE, '^',  label='Leading edge', markerfacecolor='none', markersize=6)
+
+
+    if first and not simple:
+        ax.plot(x[0], y[0], 's', label='First point', markerfacecolor='none', markersize=10)
+
+    if orient and not simple:
+        c = np.max(x) - np.min(x)  # Chord length
+        scale=0.01 * c
+        dx = x[1] - x[0]
+        dy = y[1] - y[0]
+        ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc='black', ec='black')
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.legend()
+    ax.set_aspect( 'equal' )
+    ax.set_title(title)
+    return ax
+
+
+# ---------------------------------------------------------------------------
+# --- OLD Airfoil library
 # ---------------------------------------------------------------------------
 def load_airfoil_coords(filename):
     coords = np.loadtxt(filename)
@@ -20,110 +568,11 @@ def load_airfoil_coords(filename):
         print("Adding closing point to airfoil coordinates to form closed contour.")
         coords = np.vstack([coords, coords[0]])
     # Check if the points are ordered clockwise or counterclockwise
-    if is_clockwise(coords):
+    if contour_is_clockwise(coords):
         print("Reversing airfoil coordinates to ensure counterclockwise order.")
         coords = coords[::-1]
     return coords
 
-def compute_normals_looped(coords):
-    input_is_looped = np.allclose(coords[0], coords[-1])
-    if input_is_looped:
-        open_loop = coords[:-1]  # Exclude the last point to avoid duplication
-    else:
-        open_loop = coords
-
-    prev = np.roll(open_loop, 1, axis=0)  # Shifted back by 1
-    curr = np.roll(open_loop, 0, axis=0)  
-    next = np.roll(open_loop, -1, axis=0)  # Shifted forward by 1
-
-    # Compute tangents at midpoints
-    tangents_mid = next - curr
-    tangents_mid /= np.linalg.norm(tangents_mid, axis=1)[:, np.newaxis]  # Normalize tangents
-
-    # Rotate tangents by -90 degrees to get outward normals at midpoints
-    normals_mid = np.zeros_like(tangents_mid)
-    normals_mid[:, 0] = tangents_mid[:, 1]
-    normals_mid[:, 1] = -tangents_mid[:, 0]
-
-    # Initialize normals at each point
-    normals = np.zeros_like(coords)
-    normals[0] = 0.5 * (normals_mid[0] + normals_mid[-1])
-    if input_is_looped:
-        # Average normals between midpoints
-        normals[1:-1] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
-        normals[-1] = normals[0]
-    else:
-        normals[1:] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
-
-    epsilon = 1e-10  # Small value to prevent division by zero
-    normals /= (np.linalg.norm(normals, axis=1)[:, np.newaxis] + epsilon)
-
-    return normals, normals_mid
-
-def compute_normals(coords, is_loop=False):
-    """
-    Compute the normals at each point of the airfoil and the midpoints.
-    Normals are averaged between midpoints to ensure smooth transitions.
-    """
-    if is_loop:
-        return compute_normals_looped(coords)
-    
-    # --- Normals for non-looped
-    # Compute tangents at midpoints
-    tangents_mid = coords[1:] - coords[:-1]
-    tangents_mid /= np.linalg.norm(tangents_mid, axis=1)[:, np.newaxis]  # Normalize tangents
-
-    # Rotate tangents by -90 degrees to get outward normals at midpoints
-    normals_mid = np.zeros_like(tangents_mid)
-    normals_mid[:, 0] = tangents_mid[:, 1]
-    normals_mid[:, 1] = -tangents_mid[:, 0]
-
-    # Initialize normals at each point
-    normals = np.zeros_like(coords)
-
-    # Average normals between midpoints
-    normals[1:-1] = 0.5 * (normals_mid[:-1] + normals_mid[1:])
-
-    # Handle the first and last points
-    normals[0] = normals_mid[0]  # First point normal
-    normals[-1] = normals_mid[-1]  # First point normal
-
-    # Normalize the averaged normals
-    epsilon = 1e-10  # Small value to prevent division by zero
-    normals /= (np.linalg.norm(normals, axis=1)[:, np.newaxis] + epsilon)
-
-    return normals, normals_mid
-
-def smooth_normals(normals, iterations=5, alpha=0.5, boundary_weight=0.8, is_loop=True):
-    """
-    Smooth normals using a weighted average scheme.
-    At the boundaries (trailing edge), apply a forward and backward scheme
-    to lean the normals towards the first normal.
-    Args:
-        normals (np.ndarray): Array of normals to smooth.
-        iterations (int): Number of smoothing iterations.
-        alpha (float): Smoothing factor (0 < alpha < 1).
-        boundary_weight (float): Weight for the boundary normals (0 < boundary_weight <= 1).
-    Returns:
-        np.ndarray: Smoothed normals.
-    """
-    if not is_loop:
-        raise ValueError("Smoothing is only implemented for looped normals.")
-    smoothed = normals.copy()
-    for _ in range(iterations):
-        prev = np.roll(smoothed, -1, axis=0)  # Shifted back by 1
-        next = np.roll(smoothed, 1, axis=0)  # Shifted back by 1
-        smoothed = alpha * (prev+next) + (1 - 2 * alpha) * smoothed
-    #    # Smooth interior points
-    #    smoothed[1:-1] = alpha * (smoothed[:-2] + smoothed[2:]) + (1 - 2 * alpha) * smoothed[1:-1]
-    #    # Forward scheme at the first point (trailing edge)
-    #    #smoothed[0] = boundary_weight * smoothed[0] + (1 - boundary_weight) * smoothed[1]
-    #    smoothed[0] = boundary_weight * smoothed[0] + (1 - boundary_weight) * smoothed[1]
-    #    # Backward scheme at the last point (trailing edge)
-    #    smoothed[-1] = boundary_weight * smoothed[-1] + (1 - boundary_weight) * smoothed[-2]
-    #    # Ensure the first and last normals remain consistent
-    #    smoothed[0] = smoothed[-1] = 0.5 * (smoothed[0] + smoothed[-1])
-    return smoothed
 
 
 def debug_airfoil_plot(coords, normals, indices, normals2=None):
@@ -217,96 +666,4 @@ def debug_airfoil_plot(coords, normals, indices, normals2=None):
         ax.legend()
 
 
-def detect_airfoil_te_type(coords):
-    """
-    Detects the type of trailing edge and returns the trailing edge indices and type.
-    Args:
-        coords (np.ndarray): Airfoil coordinates.
-    Returns:
-        trailing_edge_type (str): Type of trailing edge ("flatback", "sharp", or "cusp").
-        trailing_edge_indices (np.ndarray): Indices of trailing edge points.
-    """
-    # Identify trailing edge points (x == 1.0)
-    trailing_edge_indices = np.where(np.isclose(coords[:, 0], 1.0))[0]
-    if len(trailing_edge_indices) > 1:
-        trailing_edge_type = "flatback"
-    elif len(trailing_edge_indices) == 1:
-        trailing_edge_type = "sharp"
-    else:
-        trailing_edge_type = "cusp"
 
-    return trailing_edge_type, trailing_edge_indices
-
-
-def reindex_starting_from_te(coords, TE_indices):
-    """
-    Reindexes the airfoil so that the first point is at the middle of the flat trailing edge.
-    Args:
-        coords (np.ndarray): Airfoil coordinates.
-        trailing_edge_indices (np.ndarray): Indices of trailing edge points.
-    Returns:
-        reindexed_coords (np.ndarray): Reindexed airfoil coordinates.
-    """
-    TE_indices = list(TE_indices)
-
-    # Remove the last point (to avoid duplication)
-    nCoords = len(coords)
-    coords = coords[:-1]
-    if nCoords-1 in TE_indices:  
-        TE_indices.remove(nCoords-1)
-
-    # If the trailing edge is flatback, reindex
-    if len(TE_indices) > 1:
-        if np.mod(len(TE_indices), 2) == 0:
-            # If even number of trailing edge points, add a point in the middle
-            # to avoid ambiguity in the middle point
-
-            raise NotImplementedError("Even number of trailing edge points not supported yet.")
-        else:
-            mid_te_index = TE_indices[len(TE_indices)// 2-1]
-        reindexed_coords = np.roll(coords, -mid_te_index, axis=0)
-    else:
-        # If not flatback, no reindexing is needed
-        reindexed_coords = coords
-
-    # Add the first point back to close the loop
-    reindexed_coords = np.vstack([reindexed_coords, reindexed_coords[0]])
-
-    return reindexed_coords
-
-
-def detect_airfoil_features(coords):
-    """
-    Detects trailing edge, leading edge, upper surface, and lower surface points.
-    Returns:
-        trailing_edge_type (str): Type of trailing edge ("flatback", "sharp", or "cusp").
-        indices (dict): Dictionary containing indices for TE, LE, upper, and lower surfaces.
-    """
-    # Identify trailing edge points (x == 1.0)
-    trailing_edge_indices = np.where(np.isclose(coords[:, 0], 1.0))[0]
-    if len(trailing_edge_indices) > 1:
-        trailing_edge_type = "flatback"
-    elif len(trailing_edge_indices) == 1:
-        trailing_edge_type = "sharp"
-    else:
-        trailing_edge_type = "cusp"
-
-    # Identify leading edge point (minimum x-coordinate)
-    leading_edge_index = np.argmin(coords[:, 0])
-
-    # Split into upper and lower surfaces
-    upper_indices = np.arange(0, leading_edge_index + 1)
-    lower_indices = np.arange(leading_edge_index, len(coords))
-
-    # Include the first and last trailing edge points in upper and lower surfaces
-    upper_indices = np.append(upper_indices, trailing_edge_indices[0])
-    lower_indices = np.insert(lower_indices, 0, trailing_edge_indices[-1])
-
-    indices = {
-        "trailing_edge": trailing_edge_indices,
-        "leading_edge": leading_edge_index,
-        "upper_surface": upper_indices,
-        "lower_surface": lower_indices,
-    }
-
-    return trailing_edge_type, indices

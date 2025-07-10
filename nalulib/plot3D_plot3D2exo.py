@@ -242,7 +242,7 @@ def plt3d_to_exo(input_file, output_file=None, flatten=True, angle_center=None, 
                  ):
 
     # Read Plot3D file
-    coords, dims = read_plot3d(input_file, verbose=verbose)
+    coords, dims = read_plot3d(input_file, verbose=verbose, singleblock=True)
 
     if dims[-1]==1:
         raise Exception('Last input file dimension needs to be >1.\nInput file dimensions are: {}\nHas mesh been generated? '.format(dims))
