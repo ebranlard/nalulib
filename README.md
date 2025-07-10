@@ -16,6 +16,7 @@ pip install -e .
 After performing the pip install, the following tools should be accessible from the command line:
 
  - `arf-convert`: convert an airfoil from one format to another (e.g. csv to plot3d or pointwise)
+ - `arf-mesh`: mesh an airfoil surface (2D)
  - `pyhyp`: perform mesh extrusion of an airfoil
  - `exo-info`: print info about an exodus file
  - `exo-flatten`: flatten a 3D mesh into a 2D mesh (along z, preserves side-sets)

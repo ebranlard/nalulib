@@ -20,6 +20,7 @@ from nalulib.plot3D_plot3D2exo import plt3d2exo
 
 # airfoils
 from nalulib.airfoil_shapes_io import convert_airfoil_API
+from nalulib.airfoil_mesher import mesh_airfoil_API
 
 
 # pyhyp

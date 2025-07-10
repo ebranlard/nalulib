@@ -268,6 +268,7 @@ def write_airfoil_geo(x, y, output_file, lc=1.0):
 
 def write_airfoil_plot3d(x, y, filename, thick=False):
     """ Write airfoil coordinates to a Plot3D file"""
+    print('WRITE PLOT3D', filename, thick)
     if thick:
         # We duplicate the x y coordiantes and have z=0 and z=1
         coords = np.column_stack((x, y, np.zeros_like(x)))

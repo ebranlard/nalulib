@@ -49,5 +49,38 @@ class TestAirfoilLib(unittest.TestCase):
         test('naca0012')
         test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
 
+    def test_trailing_edge_angle(self):
+        def test(*args, **kwargs):
+            x, y = airfoil_get_xy(*args, **kwargs)
+            x_new, y_new = normalize_airfoil_coords(x, y)
+            angle_deg, result = airfoil_trailing_edge_angle(x_new, y_new, plot=False)
+            #self.assertIsInstance(angle_deg, float)
+            #self.assertGreaterEqual(angle_deg, 0.0)
+            #self.assertLessEqual(angle_deg, 180.0)
+            return angle_deg
+
+        angle = test('diamond')
+        angle = test('naca0012', sharp=False)
+        angle = test('naca0012', sharp=True)
+        angle = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
+        #plt.show()
+
+    def test_leading_edge_radius(self):
+        # NOTE: LEADING EDGE RADIUS IS NOT FINISHED
+        def test(*args, **kwargs):
+            x, y = airfoil_get_xy(*args, **kwargs)
+            x_new, y_new = normalize_airfoil_coords(x, y)
+            r, result = airfoil_leading_edge_radius(x_new, y_new, plot=False)
+            #self.assertGreater(r, 0.0)
+            return r
+
+        r = test('diamond')
+        r = test('naca0012', sharp=False)
+        r = test('naca0012', sharp=True)
+        r = test(os.path.join(scriptDir, '../data/airfoils/S809.csv'))
+        r = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
+        #plt.show()
+
+
 if __name__ == '__main__':
     unittest.main()

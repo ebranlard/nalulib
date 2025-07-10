@@ -20,6 +20,7 @@ setup(
             'gmsh2exo=nalulib.cli:gmsh2exo',
             'plt3d2exo=nalulib.cli:plt3d2exo',
             'arf-convert=nalulib.cli:convert_airfoil_API',
+            'arf-mesh=nalulib.cli:mesh_airfoil_API',
             'pyhyp=nalulib.cli:pyhyp_cmdline_API',
         ],
     },

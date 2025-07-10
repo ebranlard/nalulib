@@ -16,7 +16,7 @@ class TestAirfoilShape(unittest.TestCase):
         #self.assertEqual(P.cl.size,3)
         digits='0022'
         n=3
-        x, y = naca_shape(digits, chord=1, n=n, thickTEZero=True)
+        x, y = naca_shape(digits, chord=1, n=n, sharp=True)
         #print('x',x)
         #print('y',y)
 

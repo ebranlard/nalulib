@@ -2,9 +2,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import inspect
+from scipy.interpolate import interp1d
+from scipy.interpolate import splprep, splev
 
 # Local
-
 from nalulib.curves import contour_is_closed
 from nalulib.curves import contour_is_clockwise
 from nalulib.curves import contour_is_counterclockwise
@@ -21,10 +22,27 @@ from nalulib.curves import curve_interp
 from nalulib.curves import curve_coord
 from nalulib.curves import curve_enforce_superset
 
-from scipy.interpolate import interp1d
-from scipy.interpolate import splprep, splev
+# Optional
+try:
+    from nalulib.airfoil_shapes_naca import naca_shape
+    from nalulib.airfoil_shapes_io import read_airfoil
+except:
+    pass
+
 
 _DEFAULT_REL_TOL=0.000001
+
+# --- GUIDELINES FOR AIRFOIL MESHING
+GUIDELINES_N_DS_HIGH = 3000  # ds=~0.00033c
+GUIDELINES_N_DS_REC  = 200   # 
+GUIDELINES_N_DS_LOW  = 100   # ds=~0.005  c
+
+GUIDELINES_N_TE_BLUNT_HIGH = 20 # Number of points high res
+GUIDELINES_N_TE_BLUNT_REC = 10 # Number of points recommended
+GUIDELINES_N_TE_BLUNT_LOW = 5  # Number of points low res
+
+GUIDELINES_TANGENTIAL_EXPANSION_RATIO_MAX = 1.2
+
 
 # --------------------------------------------------------------------------------}
 # --- Airfoil coordinates using various methods 
@@ -54,7 +72,6 @@ def airfoil_get_xy(airfoil_coords_wrap, format=None, **kwargs):
 def airfoil_get_xy_by_string(name, **kwargs):
     name = name.lower()
     if name.startswith('naca'):
-        from nalulib.airfoil_shapes_naca import naca_shape
         # extract digits from the name
         digits = ''.join(filter(str.isdigit, name))
         naca_params = inspect.signature(naca_shape).parameters
@@ -72,7 +89,6 @@ def airfoil_get_xy_by_string(name, **kwargs):
     return x, y
 
 def airfoil_get_xy_by_file(filename, format=None):
-    from nalulib.airfoil_shapes_io import read_airfoil
     x, y, _ = read_airfoil(filename, format=format)
     return x, y
 
@@ -202,6 +218,180 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     assert np.all(IAll == np.arange(len(x))), "Indices do not match the length of x and y arrays."
 
     return IUpper, ILower, ITE, iLE
+
+
+def airfoil_trailing_edge_angle(x, y, plot=False):
+    """
+    Computes the trailing edge angle using the first two upper points and the last two lower points.
+    Returns a dictionary with:
+        - a_up, b_up: slope and intercept for upper tangent line at TE
+        - a_low, b_low: slope and intercept for lower tangent line at TE
+        - angle_deg: total trailing edge angle in degrees
+        - angle_up_deg: upper tangent angle (deg, from x-axis)
+        - angle_low_deg: lower tangent angle (deg, from x-axis)
+        - x_fit, y_fit_up, y_fit_low: points for plotting the tangent lines (optional)
+    """
+    IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y)
+    # Upper: first two points
+    x1u, y1u = x[IUpper[0]], y[IUpper[0]]
+    x2u, y2u = x[IUpper[1]], y[IUpper[1]]
+    # Lower: last two points
+    x1l, y1l = x[ILower[-1]], y[ILower[-1]]
+    x2l, y2l = x[ILower[-2]], y[ILower[-2]]
+
+    # Fit lines: y = a*x + b
+    a_up = (y2u - y1u) / (x2u - x1u) if (x2u - x1u) != 0 else np.inf
+    b_up = y1u - a_up * x1u
+
+    a_low = (y2l - y1l) / (x2l - x1l) if (x2l - x1l) != 0 else np.inf
+    b_low = y1l - a_low * x1l
+
+    # Angles (in radians)
+    theta_up = np.arctan(a_up)
+    theta_low = np.arctan(a_low)
+    # Trailing edge angle (between tangents)
+    angle_rad = np.abs(theta_up - theta_low)
+    angle_deg = np.degrees(angle_rad)
+
+    result = {
+        'a_up': a_up,
+        'b_up': b_up,
+        'a_low': a_low,
+        'b_low': b_low,
+        'angle_deg': angle_deg,
+        'angle_up_deg': np.degrees(theta_up),
+        'angle_low_deg': np.degrees(theta_low),
+    }
+    # For plotting: fit lines over a small x-range near TE
+    chord = np.max(x) - np.min(x)
+    x_te = x[IUpper[0]]
+    x_fit = np.linspace(x_te - 0.05*chord, x_te + 0.05*chord, 3)
+    y_fit_up = a_up * x_fit + b_up
+    y_fit_low = a_low * x_fit + b_low
+    result['x_fit'] = x_fit
+    result['y_fit_up'] = y_fit_up
+    result['y_fit_low'] = y_fit_low
+    if plot:
+        fig,ax = plt.subplots(1, 1, sharey=False, figsize=(12.8,4.0)) # (6.4,4.8)
+        fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+        ax.plot(x, y, 'k-', label='Airfoil contour')
+        ax.plot(x_fit, y_fit_up, 'r--', label='Upper tangent line')
+        ax.plot(x_fit, y_fit_low, 'b--', label='Lower tangent line')
+        ax.scatter([x1u, x2u], [y1u, y2u], color='red', label='Upper TE points')
+        ax.scatter([x1l, x2l], [y1l, y2l], color='blue', label='Lower TE points')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title(f'Trailing Edge Angle: {angle_deg:.2f}°')
+        ax.legend()
+        ax.set_aspect('equal')
+        ax.grid()
+
+    return angle_deg, result
+
+def airfoil_leading_edge_radius(x, y, verbose=False, plot=False):
+    """
+    Estimate the leading edge radius of an airfoil by fitting a circle to points around the LE.
+    The points are automatically selected as those closest to the LE (min x), up to the inflection
+    (where curvature changes sign) or a reasonable arc length threshold.
+    Returns a dictionary with:
+        - radius: estimated leading edge radius
+        - xc, yc: center of fitted circle
+        - x_fit, y_fit: points used for fitting
+        - x_circle, y_circle: points on the fitted circle (for plotting)
+    If plot=True, also plots the airfoil, fit points, and fitted circle.
+
+    NOTE: TODO TODO TODO LEADING EDGE RADIUS IS NOT FINISHED
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    _, _, _, iLE = airfoil_split_surfaces(x, y)
+
+    # Find points near the LE (min x)
+    xLE, yLE = x[iLE], y[iLE]
+    s = curve_coord(x, y, normalized=False)
+    sLE = s[iLE]
+
+    # Compute distance from LE for all points
+    dLE = np.sqrt((x - xLE)**2 + (y - yLE)**2)
+
+    # Heuristic: select points within a small arc length from LE (e.g., 5% of chord)
+    chord = np.max(x) - np.min(x)
+    arc_thresh = 0.05 * chord
+    idx_near = [iLE]
+    for direction in [-1, 1]:
+        i = iLE
+        arc = 0.0
+        prev_sign = None
+        while True:
+            i_next = (i + direction) % len(x)
+            ds = np.sqrt((x[i_next] - x[i])**2 + (y[i_next] - y[i])**2)
+            arc += ds
+            if arc > arc_thresh:
+                break
+            # Compute curvature sign
+            if 1 < i_next < len(x) - 1:
+                dx1 = x[i_next] - x[i]
+                dy1 = y[i_next] - y[i]
+                dx2 = x[(i_next + direction) % len(x)] - x[i_next]
+                dy2 = y[(i_next + direction) % len(y)] - y[i_next]
+                cross = dx1 * dy2 - dy1 * dx2
+                sign = np.sign(cross)
+                if prev_sign is not None and sign != prev_sign and sign != 0:
+                    break  # Inflection point detected
+                prev_sign = sign
+            idx_near.append(i_next)
+            i = i_next
+
+    idx_near = np.unique(idx_near)
+    x_fit = x[idx_near]
+    y_fit = y[idx_near]
+
+    # Fit a circle to these points
+    def fit_circle(xs, ys):
+        # Algebraic circle fit (Kasa method)
+        A = np.c_[2*xs, 2*ys, np.ones(xs.shape)]
+        b = xs**2 + ys**2
+        c, resid, rank, s = np.linalg.lstsq(A, b, rcond=None)
+        xc, yc, d = c
+        r = np.sqrt(xc**2 + yc**2 + d)
+        return xc, yc, r
+
+    xc, yc, r = fit_circle(x_fit, y_fit)
+
+    # For plotting: points on the fitted circle
+    theta = np.linspace(0, 2 * np.pi, 100)
+    x_circle = xc + r * np.cos(theta)
+    y_circle = yc + r * np.sin(theta)
+
+    result = {
+        'radius': r,
+        'xc': xc,
+        'yc': yc,
+        'x_fit': x_fit,
+        'y_fit': y_fit,
+        'x_circle': x_circle,
+        'y_circle': y_circle,
+    }
+
+    if verbose:
+        print(f"[airfoil_leading_edge_radius] Fitted circle center: ({xc:.5f}, {yc:.5f}), radius: {r:.5f}, using {len(x_fit)} points.")
+
+    if plot:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        ax.plot(x, y, 'k-', label='Airfoil contour')
+        ax.scatter(x_fit, y_fit, color='red', label='Fit points')
+        ax.plot(x_circle, y_circle, 'b--', label='Fitted circle')
+        ax.scatter([xc], [yc], color='blue', marker='x', label='Circle center')
+        ax.scatter([x[iLE]], [y[iLE]], color='green', marker='o', label='LE point')
+        ax.set_aspect('equal')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title(f'Leading Edge Radius: {r:.5f}')
+        ax.legend()
+        ax.grid()
+
+    return r, result
+
 
 # --- OLD LEGACY FUNCTIONS
 def reindex_starting_from_te(coords, TE_indices):
@@ -425,9 +615,8 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
     c = np.max(x)-np.min(x) # chord length
 
     # Rule of thumb criteria 
-    ds_min = c / 3000  # ~0.00033
-    ds_max = c / 200   # ~0.005
-    expansion_ratio_limit = 1.2
+    ds_min = c / GUIDELINES_N_DS_HIGH  # ~0.00033
+    ds_max = c / GUIDELINES_N_DS_LOW   # ~0.005
 
     # ------------- Helper for surface checks -------------
     def check_surface(ds, label):
@@ -448,7 +637,7 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
         max_ratio = np.max(ratios)
         min_ratio = np.min(ratios)
         print(f"{label}: max expansion ratio = {max_ratio:.3f}, min expansion ratio = {min_ratio:.3f}")
-        if max_ratio <= expansion_ratio_limit:
+        if max_ratio <= GUIDELINES_TANGENTIAL_EXPANSION_RATIO_MAX:
             print(f"✅ {label} expansion ratio OK.")
         else:
             print(f"❌ {label} expansion ratio too large, consider smoothing.")
@@ -462,12 +651,12 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
     check_surface(dsl, "Lower surface")
 
     # ---------------- Blunt Trailing Edge ----------------
-    if len(ITE) >= 2:
+    if len(ITE) >= 3:
         xTE = x[ITE]
         yTE = y[ITE]
         h_TE = np.abs(yTE.max() - yTE.min())
-        ds_TE_crit_min = h_TE / 10
-        ds_TE_crit_max = h_TE / 5
+        ds_TE_crit_min = h_TE / GUIDELINES_N_TE_BLUNT_HIGH
+        ds_TE_crit_max = h_TE / GUIDELINES_N_TE_BLUNT_LOW
         dsTE = np.sqrt(np.diff(xTE)**2 + np.diff(yTE)**2)
         min_dsTE = dsTE.min()
         max_dsTE = dsTE.max()
@@ -486,7 +675,7 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
         max_ratio_TE = np.max(ratios_TE)
         min_ratio_TE = np.min(ratios_TE)
         print(f"Blunt TE: max expansion ratio = {max_ratio_TE:.3f}, min expansion ratio = {min_ratio_TE:.3f}")
-        if max_ratio_TE <= expansion_ratio_limit:
+        if max_ratio_TE <= GUIDELINES_TANGENTIAL_EXPANSION_RATIO_MAX:
             print("✅ Blunt TE expansion ratio OK.")
         else:
             print("❌ Blunt TE expansion ratio too large, consider smoothing.")
