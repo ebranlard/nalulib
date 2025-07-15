@@ -81,7 +81,9 @@ def airfoil_get_xy_by_string(name, **kwargs):
         else:
             raise NotImplementedError(f"NACA shape with {len(digits)} digits is not supported: {name}") 
     elif name.startswith('diamond'):
-        x = np.array([1, 0.5, 0, 0.5, 1])
+        #x = np.array([1, 0.5, 0, 0.5, 1])
+        #y = np.array([0, 1, 0, -1, 0])
+        x = np.array([1, 0, -1, 0, 1])
         y = np.array([0, 1, 0, -1, 0])
         return x, y
     else:
@@ -471,6 +473,12 @@ def resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul, interp_te=None):
     Each interp_* function should have the signature:
         interp(x, y) -> x_new, y_new
     """
+    IAll = np.sort(np.unique(np.concatenate((IUpper, ILower, ITE))))
+    if len(IAll) != len(x) or len(IAll) != len(y):
+        raise ValueError("Number of x values does not match indices.")
+    if not np.all(IAll == np.arange(len(x))):
+        raise ValueError("Indices do not match the length of x and y arrays.")
+
     # Upper + Lower surface
     xu, yu = x[IUpper], y[IUpper]
     xl, yl = x[ILower], y[ILower]
@@ -493,6 +501,7 @@ def resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul, interp_te=None):
 
     x_new = np.concatenate([x_new[:-1], x_te_new[:-1], [x_new[0]] ])
     y_new = np.concatenate([y_new[:-1], y_te_new[:-1], [y_new[0]] ])
+
 
     return x_new, y_new
 
@@ -550,14 +559,12 @@ def resample_airfoil_refine(x, y, IUpper, ILower, ITE, factor_surf=2, factor_te=
     return x_new, y_new
 
 
-# KEEP ME FOR NOW:
-
-def resample_airfoil_hyperbolic(x, y, IUpper, ILower, ITE, n_surf=80, a_surf=2.5, interp_te=None):
+def resample_airfoil_hyperbolic(x, y, IUpper, ILower, ITE, n_surf=80, a_hyp=2.5, interp_te=None):
     """
     Resample upper, lower, and TE surfaces with hyperbolic tangent and constant spacing.
     Returns new x, y arrays (closed, counterclockwise).
     """
-    interp_upper = lambda x_, y_: curve_interp_s(x_, y_, s_new=hyperbolic_tangent_spacing_s(n_surf, a=a_surf), normalized=True)
+    interp_upper = lambda x_, y_: curve_interp_s(x_, y_, s_new=hyperbolic_tangent_spacing_s(n_surf, a=a_hyp), normalized=True)
     interp_lower = interp_upper
     x_new, y_new = resample_airfoil(x, y, IUpper, ILower, ITE, interp_upper, interp_lower, interp_te)  
 
@@ -580,13 +587,15 @@ def resample_airfoil_spline(x, y, IUpper, ILower, ITE, n_surf=1000, kind='cubic'
     The TE is not modified: it is appended at the end (constant spacing or original).
     Returns new x, y arrays (closed, counterclockwise).
     """
+    if kind not in ['cubic', 'linear']:
+        raise ValueError("kind must be 'cubic' or 'linear'.")
 
     def interp_ul(xul, yul):
         # Parameterize by cumulative chordwise distance
         u = curve_coord(xul, yul, normalized=True)
         # Spline fit
         tck, _ = splprep([xul, yul], u=u, s=0, k=3 if kind == 'cubic' else 1)
-        u_new = np.linspace(0, 1, 2 * n_surf)
+        u_new = np.linspace(0, 1, n_surf)
         return splev(u_new, tck)
 
     x_new, y_new = resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul, interp_te)  

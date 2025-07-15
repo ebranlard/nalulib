@@ -5,14 +5,26 @@ from nalulib.essentials import Timer
 # --------------------------------------------------------------------------
 # --- Connectivity
 # --------------------------------------------------------------------------
+# NOTE: this gives a negative orientation about z
+#HEX_FACES = [
+#    [1, 5, 4, 0],  # 1 
+#    [1, 2, 6, 5],  # 2
+#    [3, 2, 6, 7],  # 3
+#    [0, 3, 7, 4],  # 4
+#    [0, 1, 2, 3],  # 5
+#    [4, 5, 6, 7],  # 6
+#]
+
+# NOTE: this gives a positive orientation about z
 HEX_FACES = [
-    [1, 5, 4, 0],  # 1 
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
+    [0, 4, 5, 1],  # 1 
+    [5, 6, 2, 1],  # 2
+    [7, 6, 2, 3],  # 3
+    [4, 7, 3, 0],  # 4
+    [3, 2, 1, 0],  # 5
+    [7, 6, 5, 4],  # 6
 ]
+
 
 QUAD_SIDES = [
     [0, 1],
@@ -69,9 +81,9 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
     else:
         coords = coords
 
-    assert(coords.shape[1] == 3, "Coords should be of size 3")
-    assert(np.min(conn) == 1), "Connectivity must be 1-based"
-    assert(np.max(conn)<= len(coords)), "Connectivity must be less than number of points"
+    assert coords.shape[1] == 3, "Coords should be of size 3"
+    assert np.min(conn) == 1, "Connectivity must be 1-based"
+    assert np.max(conn)<= len(coords), "Connectivity must be less than number of points"
 
     with Timer('Writing file', silent=not profiler, writeBefore=True):
         with ExodusIIFile(filename, mode="w") as exo:
@@ -111,10 +123,67 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
     if verbose:
         print(f"Exodus file written: {filename}")
 
+def quad_is_positive_about_z(node_ids, coords):
+    """
+    Checks if the 4 node IDs (for a quad face in the x-y plane) are ordered such that
+    the normal vector points in the positive z direction (right-hand rule).
+    Returns True if the order is positive about z, False otherwise.
+
+    Args:
+        node_ids: list/array of 4 node indices (ordered as in the element connectivity)
+        coords: (n_nodes, 3) array of node coordinates
+
+    Returns:
+        True if the quad is ordered positively about z, False otherwise.
+    """
+    # Get the x, y coordinates of the quad
+    pts = np.asarray([coords[n-1][:2] for n in node_ids])
+    # Compute the signed area (shoelace formula)
+    area = 0.5 * (
+        pts[0,0]*pts[1,1] + pts[1,0]*pts[2,1] + pts[2,0]*pts[3,1] + pts[3,0]*pts[0,1]
+        - pts[1,0]*pts[0,1] - pts[2,0]*pts[1,1] - pts[3,0]*pts[2,1] - pts[0,0]*pts[3,1]
+    )
+    return area > 0
+
+def force_quad_positive_about_z(conn, coords, verbose=False):
+    """
+    For each quad in conn, check if it is positive about z using quad_is_positive_about_z.
+    If not, remap the connectivity from [0,1,2,3] to [3,2,1,0] 
+    Modifies conn in-place and returns it.
+    """
+    n=0
+    nquads = conn.shape[0]
+    for iquad in range(nquads):
+        if not quad_is_positive_about_z(conn[iquad], coords):
+            # Remap: [0,1,2,3] -> [3,2,1,0]
+            conn[iquad] = [conn[iquad][3], conn[iquad][2], conn[iquad][1], conn[iquad][0]]
+            n+= 1
+    if verbose:
+        print(f"[INFO] Reversed {n}/{nquads} quads to ensure positive orientation about z.")
+    return conn
+
 
 # --------------------------------------------------------------------------
 # --- Side sets
 # --------------------------------------------------------------------------
+def check_exodus_side_sets_exist(exo, side_set_names):
+    """
+    Checks whether the given side set name or list of names exists in the Exodus file.
+    If not, raises a ValueError and prints the list of allowed side set names.
+    """
+    # Get all side set names from the Exodus file
+    allowed_names = [str(exo.get_side_set_name(ss_id)) for ss_id in exo.get_side_set_ids()]
+    if isinstance(side_set_names, str):
+        side_set_names = [side_set_names]
+    missing = [name for name in side_set_names if name not in allowed_names]
+    if missing:
+        raise ValueError(
+            f"Side set(s) {missing} not found in Exodus file.\n"
+            f"Allowed side sets are: {allowed_names}\n"
+            f"Note: inlet and outlet name can be specified as arguments (--inlet-name, --outlet-name)."
+        )
+
+
 def set_omesh_inlet_outlet_ss(node_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center=None, 
                               inlet_start=None, inlet_span=None, outlet_start=None, 
                               inlet_name='inlet', outlet_name='outlet',

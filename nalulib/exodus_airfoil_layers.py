@@ -247,8 +247,8 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
         layers = [layer[:-1] for layer in layers]
 
     # --- Reorganize the first layer to start at the trailing edge
-    trailing_edge_idx = np.argmin(np.linalg.norm(layers[0] - np.array([1, 0]), axis=1))
-    layers = [np.roll(layer, -trailing_edge_idx, axis=0) for layer in layers]
+    #trailing_edge_idx = np.argmin(np.linalg.norm(layers[0] - np.array([1, 0]), axis=1))
+    #layers = [np.roll(layer, -trailing_edge_idx, axis=0) for layer in layers]
 
     # Ensure the loop is closed after reindexing
     if is_looped:
@@ -348,8 +348,8 @@ def exo_layers():
     import argparse
     parser = argparse.ArgumentParser(description="Extract airfoil geometry and surrounding layers from an Exodus file.")
     parser.add_argument("input_file", type=str, help="Path to the input Exodus file.")
-    parser.add_argument("-n", "--num_layers", type=int, default=1, help="Number of layers to extract.")
-    parser.add_argument("side_set_name", type=str, nargs='?', default=None, help="Name of the side set defining the airfoil. Defaults to None.")
+    parser.add_argument("-n", "--num_layers", type=int, default=1, help="Number of layers to extract. Default: 1")
+    parser.add_argument("side_set_name", type=str, nargs='?', default=None, help="Name of the side set defining the airfoil. Defaults to None, which means 'airfoil', 'wing', or 'wing_pp' are looked for.")
     parser.add_argument("--gmsh_open", action="store_true", help="Open the generated .msh file in GMSH.")
     parser.add_argument("--airfoil", action="store_true", help="Write the airfoil coordinates to *_airfoil.txt.")
     parser.add_argument("--layers", action="store_true", help="Write the layers coordinates to *_airfoil.txt.")

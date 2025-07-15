@@ -7,8 +7,11 @@ import re
 from nalulib.essentials import *
 from nalulib.exodusii.file import ExodusIIFile
 from nalulib.angles import is_angle_in_segment, compute_angles, angle_segment
-from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, set_omesh_inlet_outlet_ss
+from nalulib.exodus_core import HEX_FACES, QUAD_SIDES
 from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, ELEMTYPE_2_NUM_DIM, ELEMTYPE_2_SIDE
+from nalulib.exodus_core import check_exodus_side_sets_exist, set_omesh_inlet_outlet_ss
+
+
 
 def rotate_coordinates(coords, angle, center):
     """
@@ -38,7 +41,9 @@ def rotate_coordinates(coords, angle, center):
     else:
         return np.column_stack((x2, y2))
 
-def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nodes, debug=False, verbose=True):
+def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nodes, 
+                                inlet_name='inlet', outlet_name='outlet',
+                                debug=False, verbose=True):
     """
     Find the angular segments for inlet and outlet nodes.
 
@@ -55,10 +60,10 @@ def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nod
     inlet_nodes = []
     outlet_nodes = []
     for side_set_id, side_set_data in side_sets.items():
-        if side_set_data["name"] == "inlet":
+        if side_set_data["name"] == inlet_name:
             for elem, side in zip(side_set_data["elements"], side_set_data["sides"]):
                 inlet_nodes.extend(elem_to_face_nodes[(elem, side)])
-        elif side_set_data["name"] == "outlet":
+        elif side_set_data["name"] == outlet_name:
             for elem, side in zip(side_set_data["elements"], side_set_data["sides"]):
                 outlet_nodes.extend(elem_to_face_nodes[(elem, side)])
 
@@ -98,7 +103,10 @@ def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nod
 
     return inlet_start, inlet_span, outlet_start
 
-def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, keep_io_side_set=False, verbose=False, profiler=False):
+def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, 
+                  inlet_start=None, inlet_span=None, outlet_start=None, keep_io_side_set=False, 
+                  inlet_name='inlet', outlet_name='outlet',
+                  verbose=False, profiler=False):
     """
     Rotate an Exodus file's node coordinates and adjust side sets.
 
@@ -138,6 +146,8 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
             blk_id = exo.get_element_block_ids()[0]
             elem_conn = exo.get_element_conn(blk_id)
             elem_type = exo.get_element_block(blk_id).elem_type  # Assuming all blocks have the same type
+            # 
+            check_exodus_side_sets_exist(exo, [inlet_name, outlet_name])
 
 
     FACE_MAP = ELEMTYPE_2_SIDE[elem_type]
@@ -147,7 +157,7 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
     with Timer("Precomputing element-to-face mapping", silent=not profiler):
         elem_to_face_nodes = {}
         for side_set_id, side_set_data in side_sets.items():
-            if side_set_data["name"] in ["inlet", "outlet"]:
+            if side_set_data["name"] in [inlet_name, outlet_name]:
                 for elem, side in zip(side_set_data["elements"], side_set_data["sides"]):
                     face_node_ids = elem_conn[elem - 1][FACE_MAP[side - 1]]  # Convert to 0-based indexing
                     elem_to_face_nodes[(elem, side)] = face_node_ids
@@ -155,7 +165,8 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
     # Find inlet and outlet angular segments (before rotation)
     if inlet_start is None or inlet_span is None or outlet_start is None:
         with Timer("Finding inlet and outlet angular segments", silent=not profiler):
-            inlet_start, inlet_span, outlet_start  = inlet_outlet_angle_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, verbose=verbose)
+            inlet_start, inlet_span, outlet_start  = inlet_outlet_angle_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, 
+                inlet_name=inlet_name, outlet_name=outlet_name, debug=verbose, verbose=verbose)
     
     if hasattr(angle, '__len__'):
         angles = angle
@@ -189,15 +200,15 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
                 combined_elements = []
                 combined_sides = []
                 for side_set_id, side_set_data in side_sets.items():
-                    if side_set_data["name"] in ["inlet", "outlet"]:
+                    if side_set_data["name"] in [inlet_name, outlet_name]:
                         combined_elements.extend(side_set_data["elements"])
                         combined_sides.extend(side_set_data["sides"])
                 combined_elements = np.array(combined_elements)
                 combined_sides = np.array(combined_sides)
                 # Find the new inlet and outlet side sets based on angular position
-                new_side_sets = set_omesh_inlet_outlet_ss(rotated_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center, inlet_start, inlet_span, outlet_start)
+                new_side_sets = set_omesh_inlet_outlet_ss(rotated_coords, combined_elements, combined_sides, elem_to_face_nodes, angle_center, inlet_start, inlet_span, outlet_start, inlet_name=inlet_name, outlet_name=outlet_name)
                 for side_set_id, side_set_data in side_sets.items():
-                    if side_set_data["name"] in ["inlet", "outlet"]:
+                    if side_set_data["name"] in [inlet_name, outlet_name]:
                         for new_side_set in new_side_sets:
                             if side_set_data["name"] == new_side_set["name"]:
                                 side_sets[side_set_id] = new_side_set
@@ -268,6 +279,8 @@ def exo_rotate():
                         help="Define inlet start and inlet span (in degrees), anticlockwise.")
     parser.add_argument("--verbose", default=False, action="store_true", help="Enable verbose output.")
     parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
+    parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
+    parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
 
     args = parser.parse_args()
 
@@ -297,6 +310,8 @@ def exo_rotate():
         inlet_span=inlet_span,
         outlet_start=outlet_start,
         keep_io_side_set=args.keep_io_side_set,
+        inlet_name=args.inlet_name,
+        outlet_name=args.outlet_name,
         verbose=args.verbose,
         profiler=args.profiler
     )

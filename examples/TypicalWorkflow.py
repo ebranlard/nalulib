@@ -1,7 +1,7 @@
 import os
 import glob
 from nalulib.gmesh_gmesh2exodus import gmesh_to_exo
-from nalulib.plot3D_plot3D2exo import plt3d_to_exo
+from nalulib.plot3D_plot3D2exo import plt3d2exo
 from nalulib.exodus_info import explore_exodus_file
 from nalulib.exodus_airfoil_layers import extract_airfoil_geometry
 from nalulib.exodus_hex2quads import hex_to_quads_plane
@@ -32,7 +32,7 @@ def main(cleanUp=False, verbose=False):
     # --- Convert plot3d mesh to Exodus
     print_section('plt3d2exo')
     print_command('plt3d2exo diamond_n2.fmt     # Create exo file from plot3d')
-    plt3d_to_exo("diamond_n2.fmt", output_file="diamond_n2_2.exo", verbose=verbose)
+    plt3d2exo("diamond_n2.fmt", output_file="diamond_n2_2.exo", verbose=verbose)
 
     # --- Show Exodus file info
     print_section('explore_exodus_file')
@@ -57,16 +57,16 @@ def main(cleanUp=False, verbose=False):
 
     # --- Create 3D mesh from 2D mesh
     print_section('quad_to_hex / zextrude')
-    print_command('exo-zextrude diamond_n1.exo -z 4 -n 120       # Create 3D mesh from 2D mesh')
+    print_command('exo-zextrude diamond_n1.exo -z 4 -n 20       # Create 3D mesh from 2D mesh')
     quads_to_hex(input_file="diamond_n1.exo", output_file=None, 
-                nSpan=120, zSpan=4, zoffset=0.0,
+                nSpan=20, zSpan=4, zoffset=0.0,
                 verbose=verbose, airfoil2wing=True, ss_wing_pp=True, profiler=False, ss_suffix=None)
 
     # --- Rotate mesh by 30 deg
     print_section('rotate')
-    print_command('exo-rotate   diamond_n120.exo -a 30             # Rotate mesh by 30 deg')
+    print_command('exo-rotate   diamond_n20.exo -a 30             # Rotate mesh by 30 deg')
     rotate_exodus(
-        input_file="diamond_n120.exo", output_file=None,  
+        input_file="diamond_n20.exo", output_file=None,  
         angle=30, center=(0, 0),
         angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None,
         keep_io_side_set=False, verbose=verbose, profiler=False)

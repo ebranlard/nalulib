@@ -1,6 +1,7 @@
 import numpy as np
 # Local
 from nalulib.essentials import *
+from nalulib.exodus_core import quad_is_positive_about_z
 from nalulib.exodusii.file import ExodusIIFile
 
 def explore_exodus_file(filename, n=5, nss=10):
@@ -73,6 +74,7 @@ def explore_exodus_file(filename, n=5, nss=10):
         ne = min(n, exo.num_elems())
         print("\n--- First {}/{} Elements ---".format(ne, exo.num_elems()))
         element_ids = exo.get_element_id_map()
+
         for block_id in exo.get_element_block_ids():
             block_info = exo.get_element_block(block_id)
             #    info = SimpleNamespace(
@@ -90,7 +92,11 @@ def explore_exodus_file(filename, n=5, nss=10):
             elem_conn = exo.get_element_conn(block_id)
             for i, elem_id in enumerate(element_ids[:ne]):
                 nodes = elem_conn[i]
-                print(f"Element ID: {elem_id}, Node IDs: {nodes}")
+                if block_info.elem_type.lower() in ['quad']:
+                    orientation = {True: 'positive', False:'negative'}[quad_is_positive_about_z(nodes, node_coords)]
+                    print(f"Element ID: {elem_id}, Node IDs: {nodes}, Orientation: {orientation}")
+                else:
+                    print(f"Element ID: {elem_id}, Node IDs: {nodes}")
 
         # Display the first n side sets
         nss = min(nss, exo.num_side_sets())

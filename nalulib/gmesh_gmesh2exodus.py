@@ -2,6 +2,7 @@
 import os
 import numpy as np
 from nalulib.essentials import *
+from nalulib.exodus_core import HEX_FACES
 from nalulib.exodusii.file import ExodusIIFile
 
 # Define the faces of a HEX8 element
@@ -21,15 +22,24 @@ from nalulib.exodusii.file import ExodusIIFile
 #    [0, 4, 7, 3],  # -Z face
 #    [1, 2, 6, 5],  # +Z face
 #]
-hex_faces = [
-    [1, 5, 4, 0],  # 1 
-    [1, 2, 6, 5],  # 2
-    [3, 2, 6, 7],  # 3
-    [0, 3, 7, 4],  # 4
-    [0, 1, 2, 3],  # 5
-    [4, 5, 6, 7],  # 6
-]
-
+#hex_faces = [
+#    [1, 5, 4, 0],  # 1 
+##    [1, 2, 6, 5],  # 2
+##    [3, 2, 6, 7],  # 3
+##    [0, 3, 7, 4],  # 4
+##    [0, 1, 2, 3],  # 5
+##    [4, 5, 6, 7],  # 6
+##]
+#
+##hex_faces = [
+#    [0, 4, 5, 1],  # 1 
+#    [5, 6, 2, 1],  # 2
+#    [7, 6, 2, 3],  # 3
+#    [4, 7, 3, 0],  # 4
+#    [3, 2, 1, 0],  # 5
+#    [7, 6, 5, 4],  # 6
+#]
+#
 
 def gmesh_to_exo(input_file, output_file=None, verbose=False, profiler=False, debug=False):
     """
@@ -124,7 +134,7 @@ def gmesh_to_exo(input_file, output_file=None, verbose=False, profiler=False, de
         for hex_id, hex_element in enumerate(elements, start=1):  # 1-based hex ID
             element_faces[hex_id] = {
                 face_id: set(hex_element[node] for node in face_nodes)
-                for face_id, face_nodes in enumerate(hex_faces, start=1)
+                for face_id, face_nodes in enumerate(HEX_FACES, start=1)
             }
 
         # Create a mapping from node IDs to elements

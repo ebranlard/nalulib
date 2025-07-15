@@ -107,6 +107,7 @@ class NormalizedAirfoilShape():
         self._xLE, self._yLE = self._x[self._iLE]   , self._y[self._iLE]
 
     def resample_te(self, n_te=None, inplace=False):
+        self._split_surfaces()
         if n_te is not None:
             interp_te = lambda x_, y_ : curve_interp(x_, y_, n=n_te)
         else:
@@ -114,9 +115,9 @@ class NormalizedAirfoilShape():
         x_new, y_new = resample_airfoil_ul(self._x, self._y, self._IUpper, self._ILower, self._ITE, interp_ul=None, interp_te=interp_te)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_te')
 
-    def resample_spline(self, n_surf=1000, inplace=False):
+    def resample_spline(self, n_surf=1000, inplace=False, kind='cubic'):
         self._split_surfaces()
-        x_new, y_new = resample_airfoil_spline(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf)
+        x_new, y_new = resample_airfoil_spline(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf, kind=kind)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_spline')
 
     def resample_cosine(self, n_surf=80, inplace=False):
@@ -124,16 +125,16 @@ class NormalizedAirfoilShape():
         x_new, y_new = resample_airfoil_cosine(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_cosine')
 
-    def resample_hyperbolic(self, n_surf=80, a_surf=2.5, inplace=False):
+    def resample_hyperbolic(self, n_surf=80, a_hyp=2.5, inplace=False):
         self._split_surfaces()
-        x_new, y_new = resample_airfoil_hyperbolic(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf, a_surf=a_surf)
+        x_new, y_new = resample_airfoil_hyperbolic(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf, a_hyp=a_hyp)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_hyper')
 
     def resample_refine(self, factor_surf=2, factor_te=1, inplace=False):
         x_new, y_new = resample_airfoil_refine(self._x, self._y, self._IUpper, self._ILower, self._ITE, factor_surf=factor_surf, factor_te=factor_te)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_refine')
 
-    def resample(self, method='', inplace=False, n=None, n_te=None, verbose=False, **kwargs):
+    def resample(self, method='', inplace=False, n=None, n_te=None, verbose=False, a_hyp=2.5, **kwargs):
 
         arf = self
         # --- Auto method
@@ -147,16 +148,19 @@ class NormalizedAirfoilShape():
 
         if n_te is not None:
             arf = arf.resample_te(n_te=n_te, inplace=inplace)
+            #arf.plot(title='Resampled TE')
 
         if method == 'equi_n':
             # TODO CUBIC OR LINEAR
-            arf = arf.resample_spline(n_surf=n, inplace=inplace)
+            arf = arf.resample_spline(n_surf=n, inplace=inplace, kind='linear')
         elif method == 'cosine':
             arf = arf.resample_cosine(n_surf=n, inplace=inplace)
         elif method == 'hyperbolic':
-            arf = arf.resample_hyperbolic(n_surf=n, inplace=inplace)
+            arf = arf.resample_hyperbolic(n_surf=n, inplace=inplace, a_hyp=a_hyp)
         elif method == 'refine':
             arf = arf.resample_refine(factor_surf=n, factor_te=1, inplace=inplace)
+        elif method == 'none':
+            pass
         else:
             raise ValueError("Unknown resampling method: {}".format(method))
         return arf
@@ -236,7 +240,8 @@ class NormalizedAirfoilShape():
 
 
 def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=True, respline=True, Re=1e6, 
-                 outputfile=None, format=None, output_format=None, verbose=False, plot=False, thick=True, **kwargs):
+                 outputfile=None, format=None, output_format=None, verbose=False, plot=False, thick=True, 
+                 a_hyp=2.5, **kwargs):
     # Get airfoil coordinates based on multiple types of inputs for convenience
     x, y = airfoil_get_xy(airfoil_coords_wrap, format=format)
 
@@ -253,10 +258,16 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
     if plot:
         arf.plot(title='Original')
 
-    if respline and method != 'refine':
+    if respline and method != 'refine' and method != 'none':
         arf = arf.resample_spline(n_surf=500, inplace=True)
+        if plot:
+            arf.plot(title='Resplined')
+        #if verbose:
+        #    print(arf)
+    else:
+        print('[INFO] No respline before meshing, using original coordinates.')
 
-    arf.resample(method=method, n=n, n_te=n_te, inplace=True, verbose=verbose)
+    arf.resample(method=method, n=n, n_te=n_te, inplace=True, verbose=verbose, a_hyp=a_hyp, **kwargs)
 
     if check:
         arf.check_mesh(Re=Re)
@@ -269,7 +280,7 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
 
     if plot:
         arf.plot(title='Remeshed')
-        plt.show()
+    plt.show()
 
 
 
@@ -296,7 +307,7 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
 
 
 
-def mesh_airfoil_API():
+def mesh_airfoil_CLI():
     """
     Command-line interface for meshing an airfoil.
     """
@@ -306,7 +317,8 @@ def mesh_airfoil_API():
     parser.add_argument("-o", "--output", type=str, default=None, help="Output file path.")
     parser.add_argument("-n", "--n", type=int, default=100, help="Number parameter (e.g. per surface, default: 100).")
     parser.add_argument("--n_te", type=int, default=None, help="Number of trailing edge points (if blunt TE).")
-    parser.add_argument("--method", type=str, default="auto", choices=["auto", "cosine", "hyperbolic", "equi_n", "refine"], help="Meshing method.")
+    parser.add_argument("--method", type=str, default="auto", choices=["auto", "cosine", "hyperbolic", "equi_n", "refine","none"], help="Meshing method.")
+    parser.add_argument("--a_hyp", type=float, default=2.5, help="Hyperbolic clustering parameter (used if method='hyperbolic').")
     parser.add_argument("--format", type=str, default=None, help="Input format (e.g. 'csv', 'pointwise') if input file provided. If omitted, the fileformat is inferred from the extension.")
     parser.add_argument("--output-format", type=str, default=None, help="Output format (e.g. 'csv', 'pointwise') if output file provided.")
     parser.add_argument("--no-respline", action="store_true", help="Do not respline before meshing.")
@@ -331,12 +343,13 @@ def mesh_airfoil_API():
         outputfile=args.output,
         format=args.format,
         output_format=args.output_format,
-        verbose=args.verbose
+        verbose=args.verbose,
+        a_hyp=args.a_hyp
     )
 
 
 if __name__ == '__main__':
-    mesh_airfoil_API()
+    #mesh_airfoil_CLI()
 
     #import matplotlib.pyplot as plt
     #from nalulib.airfoil_shapes_naca import naca_shape
@@ -346,7 +359,7 @@ if __name__ == '__main__':
     #x,y = naca_shape('0024', chord=1, n=5, sharp=True, pitch=0, xrot=0.25)
 
     #mesh_airfoil((x,y))
-    #mesh_airfoil('naca0012')
+    mesh_airfoil('naca0012', method='hyperbolic', n=10, n_te=4, check=False, respline=True, verbose=True, plot=True, thick=True)
     #mesh_airfoil(os.path.join(scriptDir, '../data/FFA_211_Re=10M_AoA0_nSpan=120_airfoil.txt'), format='csv')
     #mesh_airfoil(os.path.join(scriptDir, '../data/FFA_211_Re=10M_AoA0_nSpan=120_airfoil.txt'), format='csv')
     #mesh_airfoil(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), format='pointwise', verbose=True)

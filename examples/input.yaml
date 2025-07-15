@@ -104,7 +104,7 @@ realms:
   rebalance_mesh: true
   stk_rebalance_method: parmetis
   automatic_decomposition_type: rcb
-  mesh: diamond_n120.exo
+  mesh: diamond_n20.exo
 
 # Initial conditions - airfoil
   initial_conditions:

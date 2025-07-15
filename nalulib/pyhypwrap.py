@@ -149,15 +149,23 @@ def pyhyp_run_WSL(options, output_file='output.fmt', input_file=None, verbose=Fa
         print('>>> Output file generated:', output_file)
 
 
-def pyhyp_cmdline_API():
+def pyhyp_cmdline_CLI():
 
     parser = argparse.ArgumentParser(description="Run pyHyp with input and output files.")
     parser.add_argument('-i', '--input', required=True, help='Input file path')
     parser.add_argument('-o', '--output', required=False, help='Output file path', default='_OUTPUT.fmt')
-    parser.add_argument('--N', type=int, help='Grid parameter N')
+    parser.add_argument('-n', '--N', type=int, help='Grid parameter N')
+    parser.add_argument('--s0', type=float, help='Grid parameter s0')
     parser.add_argument('--marchDist', type=float, help='Grid parameter marchDist')
-
-    # 
+    parser.add_argument('--ps0', type=float, help='Pseudo grid parameter ps0')
+    parser.add_argument('--pGridRatio', type=float, help='Pseudo grid parameter pGridRatio')
+    parser.add_argument('--cMax', type=float, help='Pseudo grid parameter cMax')
+    parser.add_argument('--epsE', type=float, help='Smoothing parameter epsE')
+    parser.add_argument('--epsI', type=float, help='Smoothing parameter epsI')
+    parser.add_argument('--theta', type=float, help='Smoothing parameter theta')
+    parser.add_argument('--volCoef', type=float, help='Smoothing parameter volCoef')
+    parser.add_argument('--volBlend', type=float, help='Smoothing parameter volBlend')
+    parser.add_argument('--volSmoothIter', type=int, help='Smoothing parameter volSmoothIter')
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
 
     args = parser.parse_args()
@@ -166,8 +174,28 @@ def pyhyp_cmdline_API():
     options = _DEFAULT_OPTIONS.copy()
     if args.N is not None:
         options['N'] = args.N
+    if args.s0 is not None:
+        options['s0'] = args.s0
     if args.marchDist is not None:
         options['marchDist'] = args.marchDist
+    if args.ps0 is not None:
+        options['ps0'] = args.ps0
+    if args.pGridRatio is not None:
+        options['pGridRatio'] = args.pGridRatio
+    if args.cMax is not None:
+        options['cMax'] = args.cMax
+    if args.epsE is not None:
+        options['epsE'] = args.epsE
+    if args.epsI is not None:
+        options['epsI'] = args.epsI
+    if args.theta is not None:
+        options['theta'] = args.theta
+    if args.volCoef is not None:
+        options['volCoef'] = args.volCoef
+    if args.volBlend is not None:
+        options['volBlend'] = args.volBlend
+    if args.volSmoothIter is not None:
+        options['volSmoothIter'] = args.volSmoothIter
 
     # Prepare data dictionary
     options['inputFile'] = args.input
@@ -177,7 +205,17 @@ def pyhyp_cmdline_API():
         print(f"Input file      : {args.input}")  
         print(f"Output file     : {args.output}")
         print(f"Grid parameter N: {options['N']}")
-
+        print(f"s0              : {options.get('s0')}")
+        print(f"marchDist       : {options.get('marchDist')}")
+        print(f"ps0             : {options.get('ps0')}")
+        print(f"pGridRatio      : {options.get('pGridRatio')}")
+        print(f"cMax            : {options.get('cMax')}")
+        print(f"epsE            : {options.get('epsE')}")
+        print(f"epsI            : {options.get('epsI')}")
+        print(f"theta           : {options.get('theta')}")
+        print(f"volCoef         : {options.get('volCoef')}")
+        print(f"volBlend        : {options.get('volBlend')}")
+        print(f"volSmoothIter   : {options.get('volSmoothIter')}")
 
     # --- Detect if pyhyp can be imported
     print('############################## PYHYP ####################################')
@@ -196,7 +234,7 @@ def pyhyp_cmdline_API():
     print('########################## END PYHYP ####################################')
 
 if __name__ == "__main__":
-    pyhyp_cmdline_API()
+    pyhyp_cmdline_CLI()
 
     #options={}
     ##options['Hello']=3

@@ -5,12 +5,13 @@ import os
 from nalulib.essentials import *
 from nalulib.exodusii.file import ExodusIIFile
 from nalulib.exodus_core import HEX_FACES, QUAD_SIDES, write_exodus_quads
+from nalulib.exodus_core import quad_is_positive_about_z
 
 
 # TODO
 SIDE_SETS_EXCLUDE=['front', 'back','wing-pp', 'wing_pp', 'front_bg', 'back_bg']
 
-def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False):
+def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False, check_zpos=True):
     # Read basic information
     num_nodes = exo.num_nodes()
     num_elems = exo.num_elems()
@@ -76,8 +77,11 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False)
     with Timer('Processsing faces', silent=not profiler, writeBefore=True):
         for elem_idx, face_idx in elements_with_faces:
             face_nodes_ids = all_faces[elem_idx, face_idx]
-            sorted_face = tuple(sorted(face_nodes_ids))
+            sorted_face = tuple(sorted(face_nodes_ids)) # To ensure uniqueness, we sort and create a tuple
             if sorted_face not in sorted_quads_set:
+                if not quad_is_positive_about_z(face_nodes_ids, node_coords) and check_zpos:
+                    print('[WARN] Face is oriented negatively about Z, reorienting it:', face_nodes_ids)
+                    face_nodes_ids = [face_nodes_ids[3], face_nodes_ids[2], face_nodes_ids[1], face_nodes_ids[0]]  # Reverse the order
                 # Add the original face to the quads list
                 quad = {
                     'node_ids': face_nodes_ids,
@@ -97,6 +101,8 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False)
                     )
                     print(f"  Face {face_idx} of element {filtered_elem_ids[elem_idx]}: {node_coords_str}")
 
+    #if check_zpos:
+    #    conn= force_quad_positive_about_z(conn, coords, verbose=True)
 
     # --- Step 2: Handle side sets
     with Timer('Matching side sets', silent=not profiler, writeBefore=True):
@@ -192,7 +198,7 @@ def reindex_quads(quads, old_node_coords, side_sets, z_ref, verbose=False, profi
             new_side_sets[new_id+1] = side_set_data
     return quads, nodes_coords, new_side_sets
 
-def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, profiler=False):
+def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, profiler=False, check_zpos=True):
     """
     Extract a plane of HEX elements at a specific Z value, convert to QUADs, and export to a new Exodus file.
 
@@ -208,10 +214,10 @@ def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, p
     print( 'Opening Exodus file      :', input_file)
     # Read exodus and extrad quads at z_ref
     with ExodusIIFile(input_file, mode="r") as exo:
-        quads, side_sets, node_coords, z_ref = exo_hex_to_quads(exo, z_ref=z_ref, verbose=verbose, profiler=profiler)
         block_id = exo.get_element_block_ids()[0]
         block_info = exo.get_element_block(block_id)
         block_name_in = block_info.name
+        quads, side_sets, node_coords, z_ref = exo_hex_to_quads(exo, z_ref=z_ref, verbose=verbose, profiler=profiler, check_zpos=check_zpos)
 
     # Reindex
     quads, nodes_coords, side_sets = reindex_quads(quads, node_coords, side_sets, z_ref, verbose=verbose, profiler=profiler)
@@ -240,6 +246,7 @@ def exo_hex2quads():
                         help="Reference Z value for the plane. If None, the Z value of the first node is used.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
     parser.add_argument("--profiler", action="store_true", help="Enable profiler timing .")
+    parser.add_argument("--no-zpos-check", action="store_true", help="Do not check and enforce the orientation of quads about Z axis (default: check).")
 
     args = parser.parse_args()
 
@@ -248,6 +255,7 @@ def exo_hex2quads():
             input_file=args.input_file,
             output_file=args.output,
             z_ref=args.z,
+            check_zpos= not args.no_zpos_check,
             verbose=args.verbose,
             profiler=args.profiler
         )
