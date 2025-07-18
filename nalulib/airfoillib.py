@@ -804,6 +804,46 @@ def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None
     ax.set_title(title + f' n={len(x)} {TE_type} TE')
     return ax
 
+def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True):
+    """
+    Simple airfoil plotting function.
+    Highlights only the first point, last point, and orientation (arrow from first to second point).
+    Does not attempt to detect TE/LE or surface types.
+    """
+    normalized = airfoil_is_normalized(x, y, raiseError=False)
+    if normalized:
+        return plot_normalized(x, y, label=label, title=title, sty=sty, ax=ax)
+    
+    orientation = contour_orientation(x, y)
+
+    import matplotlib.pyplot as plt
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+    # Main plot
+    ax.plot(x, y, sty, label=label, ms=5)
+    # Highlight first point
+    ax.plot(x[0], y[0], 'go', label='First point', markersize=8)
+    # Highlight last point
+    ax.plot(x[-1], y[-1], 'ro', label='Last point', markersize=8, markerfacecolor='none')
+    # Orientation arrow (from first to second point)
+    if orient:
+        dx = (x[1] - x[0])*3
+        dy = (y[1] - y[0])*3
+        c = np.max(x) - np.min(x)
+        scale = 0.03 * c
+        ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc='black', ec='black')
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_aspect('equal')
+    ax.set_title(title + f'n={len(x)}'+ ' orientation: ' + orientation + ', normalized: ' + str(normalized))
+    ax.legend()
+    return ax
+# ---------------------------------------------------------------------------
+
+ 
 
 # ---------------------------------------------------------------------------
 # --- OLD Airfoil library

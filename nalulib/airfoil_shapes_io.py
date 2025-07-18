@@ -69,11 +69,19 @@ def write_airfoil(x, y, filename, format=None, **kwargs):
     else:
         raise NotImplementedError(f"Format {format} is not supported.")
 
-def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False, thick=False):
+def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False, thick=False, standardize=False, overwrite_allowed=False, plot=False):
     """"""
     # Determine output file and format
     if output_file is None and out_format is None:
-        raise Exception("Error: You must provide either --output or --format.")
+        if standardize:
+            if overwrite_allowed:
+                output_file=input_file
+            else:
+                base, ext = os.path.splitext(input_file)
+                output_file = base +  '_std' + ext
+            print('Output file:', output_file)
+        else:
+            raise Exception("Error: You must provide either --output or --format.")
 
     if output_file is None:
         # Replace extension with format
@@ -97,6 +105,25 @@ def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False
     # Read and write
     from nalulib.airfoil_shapes_io import read_airfoil, write_airfoil
     x, y, d = read_airfoil(input_file)
+
+    if standardize:
+        if verbose:
+            print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
+        from nalulib.airfoillib import normalize_airfoil_coords
+        x, y = normalize_airfoil_coords(x, y, verbose=verbose)
+
+    if plot:
+        import matplotlib.pyplot as plt
+        from nalulib.airfoillib import plot_airfoil
+        plot_airfoil(x, y)
+        plt.show()
+    
+    if output_file == input_file and not overwrite_allowed:
+        print("[WARN] Output file is the same as input file, not overwriting it.")
+        base, ext = os.path.splitext(output_file)
+        output_file =base +  '_output' + ext
+        print('New output file:', output_file)
+
     write_airfoil(x, y, output_file, format=out_format, thick=thick)
     if verbose:
         print("Conversion complete.")
@@ -291,15 +318,13 @@ def convert_airfoil_CLI():
     parser.add_argument('-o', '--output', required=False, help='Output file path. If not provided, the output file will be derived from the input file name and format.')
     parser.add_argument('-f', '--format', required=False, help='Output file format (csv [csv], plot3d [fmt, xyz], pointwise [pw], geo). If not provided, the output file format will be derived from the output file extension.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output.')
+    parser.add_argument(      '--std' , action='store_true', help='Standardize the format so the coorniates are: looped, anticlockwise, and starting from the upper TE.')
+    parser.add_argument(      '--plot' , action='store_true', help='Plot the airfoil shape after reading (and standardizing if --std is used).')
     parser.add_argument(      '--thick' , action='store_true', help='Enable spanwise output for plot3d format.')
 
     args = parser.parse_args()
 
-    if args.output is None and args.format is None:
-        print("Error: You must provide --output and/or --format.")
-        sys.exit(1)
-    
-    convert_airfoil(args.input, output_file=args.output, out_format=args.format, verbose=args.verbose, thick=args.thick)
+    convert_airfoil(args.input, output_file=args.output, out_format=args.format, verbose=args.verbose, thick=args.thick, standardize=args.std, plot=args.plot, overwrite_allowed=False)
 
 
 if __name__ == "__main__":

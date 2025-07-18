@@ -254,7 +254,7 @@ def pyhyp_cmdline_CLI():
         input_file_tmp = None
     except:
         print('[INFO] Input file is not in PLOT3D format, converting it')
-        input_file_tmp = args.input+'_temp.csv'
+        input_file_tmp = args.input+'_temp.fmt'
         convert_airfoil(args.input, input_file_tmp, out_format='plot3d', thick=True)
         input_file = input_file_tmp
     options['inputFile'] = input_file

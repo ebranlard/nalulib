@@ -44,7 +44,7 @@ def find_neighbor_element(elem_id, side_index, elem_conn, elem_to_sides):
     return None, None  # No neighbor found
 
 
-def find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coords, elem_conn, elem_to_sides):
+def find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coords, elem_conn, elem_to_sides, check=True):
     """
     Compute the coordinates of the current layer.
 
@@ -61,14 +61,26 @@ def find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coo
     current_layer_coords = []
     previous_side_nodes = None
 
+    #Inelems = len(current_layer_elem_ids)
+    #Inelems2 = len(current_layer_elem_sides)
+    #Iprint('nElem', nelems, nelems2)
+
+    problem=False
     for i, (elem_id, side_index) in enumerate(zip(current_layer_elem_ids, current_layer_elem_sides)):
         current_side_nodes = elem_to_sides[elem_id][side_index - 1]
 
         # Sanity check: Ensure the current side shares a node with the previous side
         if i > 0:
+            #p1, p2 = previous_side_nodes
+            #c1, c2 = current_side_nodes
+            #!print(i, nelems, 'prev', previous_side_nodes, 'curr', current_side_nodes, 'prev', node_coords[p1-1], node_coords[p2-1], node_coords[c1-1], node_coords[c2-1])
             common_nodes = set(previous_side_nodes).intersection(set(current_side_nodes))
             if len(common_nodes) != 1:
-                raise ValueError(f"Sanity check failed: Element {elem_id} does not share exactly one node with the previous element.")
+                if check:
+                    raise ValueError(f"Sanity check failed: Element {elem_id} does not share exactly one node with the previous element.")
+                else:
+                    print(f"[WARN] Sanity check failed: Element {elem_id} does not share exactly one node with the previous element.")
+                    problem=True
 
         # Add the nodes to the current layer coordinates
         if i == 0:
@@ -85,6 +97,22 @@ def find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coo
                     current_layer_coords[0], current_layer_coords[1] = current_layer_coords[1], current_layer_coords[0]
 
         previous_side_nodes = current_side_nodes
+    if problem:
+        print("[WARN] Problem with layer extraction, but continuing...")
+        print("       This likely indicates that the airfoil points IDs are not looped nicely.")
+        print("       We would need to reindex the points extracted in this later.")
+    
+    #current_layer_coords = np.array(current_layer_coords)
+    #print(current_layer_coords)
+    #print(current_layer_coords.shape)
+    #fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
+    #fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+    #ax.plot(current_layer_coords[:,0], current_layer_coords[:,1]    , label='')
+    #ax.set_xlabel('')
+    #ax.set_ylabel('')
+    #ax.legend()
+    #plt.show()
+    #raise Exception()
 
     return np.array(current_layer_coords)
 
@@ -122,7 +150,7 @@ def find_next_layer(current_layer_elem_ids, current_layer_elem_sides, elem_to_si
     return next_layer_elem_ids, next_layer_elem_sides
 
 
-def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefix='', verbose=True, write_airfoil=False, plot=False, gmsh_write=False, gmsh_open=False, write_layers=False, write_fig=False, profiler=False):
+def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefix='', verbose=True, write_airfoil=False, plot=False, gmsh_write=False, gmsh_open=False, write_layers=False, write_fig=False, profiler=False, check=True):
     """
     Extract airfoil geometry and surrounding layers from an Exodus file.
 
@@ -217,7 +245,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
             current_layer_elem_sides = next_layer_elem_sides
 
             # Compute current layer coordinates
-            current_layer_coords = find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coords, elem_conn, elem_to_sides)
+            current_layer_coords = find_layer_coords(current_layer_elem_ids, current_layer_elem_sides, node_coords, elem_conn, elem_to_sides, check=check)
             layers.append(current_layer_coords)
 
             # Compute diagnostics for the current layer
@@ -237,7 +265,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
         
     # --- Add the last layer based on the opposide side
     opposite_side_index = np.mod((np.asarray(current_layer_elem_sides) - 1 + 2) , 4) + 1
-    final_layer_coords = find_layer_coords(current_layer_elem_ids, opposite_side_index, node_coords, elem_conn, elem_to_sides)
+    final_layer_coords = find_layer_coords(current_layer_elem_ids, opposite_side_index, node_coords, elem_conn, elem_to_sides, check=check)
     layers.append(final_layer_coords)
 
     # --- Check if layer 0 is looped
@@ -357,6 +385,7 @@ def exo_layers():
     parser.add_argument("--plot", action="store_true", help="Plot the extracted layers.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
     parser.add_argument("--profiler", action="store_true", help="Enable Profiling.")
+    parser.add_argument("--no-check", action="store_true", help="Disable mesh consistency checks.")
     args = parser.parse_args()
 
     extract_airfoil_geometry(
@@ -368,7 +397,8 @@ def exo_layers():
         verbose=args.verbose,
         gmsh_open=args.gmsh_open,
         plot=args.plot,
-        profiler=args.profiler
+        profiler=args.profiler,
+        check=not args.no_check
     )
     #if args.plot:
     #    plt.show()
