@@ -361,6 +361,41 @@ def point_in_contour(X, Y, contour, method='ray_casting'):
     B =  Bf.reshape(shape_in)
     return B
 
+
+def contour_angles(x, y):
+    """
+    Computes the angle at each point of a closed contour (in degrees).
+    For a closed contour, each point uses its previous and next neighbors.
+    Returns an array of angles (degrees).
+    For a square, it should return 90, 90, 90, 90, 90
+    For points on a line, returns 180
+    If the contour is closed (first and last point are the same), ignores the last point for angle calculation.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    n = len(x)
+    # Check for closed contour (first and last point repeated)
+    is_closed = np.allclose([x[0], y[0]], [x[-1], y[-1]])
+    if is_closed:
+        x = x[:-1]
+        y = y[:-1]
+        n = len(x)
+    angles = np.zeros(n)
+    for i in range(n):
+        i_prev = (i - 1) % n
+        i_next = (i + 1) % n
+        v1 = np.array([x[i_prev] - x[i], y[i_prev] - y[i]])
+        v2 = np.array([x[i_next] - x[i], y[i_next] - y[i]])
+        v1_norm = v1 / np.linalg.norm(v1)
+        v2_norm = v2 / np.linalg.norm(v2)
+        dot = np.clip(np.dot(v1_norm, v2_norm), -1.0, 1.0)
+        angle_rad = np.arccos(dot)
+        angle_deg = np.degrees(angle_rad)
+        angles[i] = angle_deg
+    if is_closed:
+        angles = np.append(angles, angles[0])
+    return angles
+
 # --------------------------------------------------------------------------------
 # --- Contour Actions
 # --------------------------------------------------------------------------------
@@ -804,6 +839,80 @@ class TestCurves(unittest.TestCase):
         self.assertEqual(contour_orientation(x2, y2), "counterclockwise")
         np.testing.assert_array_equal(x, x2)
         np.testing.assert_array_equal(y, y2)
+
+
+    def test_contour_angle_square_closed(self):
+        # Square, 5 points (closed)
+        x = np.array([0, 1, 1, 0, 0])
+        y = np.array([0, 0, 1, 1, 0])
+        angles = contour_angles(x, y)
+        expected = np.full(5, 90.0)
+        np.testing.assert_allclose(angles, expected, atol=1e-6)
+        # same test for a non-closed contour
+        x = x[:-1]
+        y = y[:-1]
+        angles = contour_angles(x, y)
+        expected = expected[:-1]  # Last angle is not defined for non-closed contour
+        np.testing.assert_allclose(angles, expected, atol=1e-6) 
+
+    def test_contour_angle_square_with_midpoints(self):
+        # Square with midpoints on each edge, 9 points (closed)
+        x = np.array([0, 0.5, 1, 1, 1, 0.5, 0, 0, 0])
+        y = np.array([0, 0, 0, 0.5, 1, 1, 1, 0.5, 0])
+        angles = contour_angles(x, y)
+        expected = np.array([90, 180, 90, 180, 90, 180, 90, 180, 90])
+        np.testing.assert_allclose(angles, expected, atol=1e-6)
+        # same test for a non-closed contour
+        x = x[:-1]
+        y = y[:-1]
+        angles = contour_angles(x, y)
+        expected = expected[:-1]  # Last angle is not defined for non-closed contour
+        np.testing.assert_allclose(angles, expected, atol=1e-6) 
+
+    def test_contour_angle_triangle(self):
+        # Equilateral triangle, 4 points (closed)
+        x = np.array([0, 1, 0.5, 0])
+        y = np.array([0, 0, np.sqrt(3)/2, 0])
+        angles = contour_angles(x, y)
+        expected = np.array([60, 60, 60, 60])
+        np.testing.assert_allclose(angles, expected, atol=1e-6)
+        # same test for a non-closed contour
+        x = x[:-1]
+        y = y[:-1]
+        angles = contour_angles(x, y)
+        expected = expected[:-1]  # Last angle is not defined for non-closed contour
+        np.testing.assert_allclose(angles, expected, atol=1e-6) 
+
+    def test_contour_angle_line(self):
+        # Straight line, 3 points (closed)
+        x = np.array([0, 1, 2, 0])
+        y = np.array([0, 0, 0, 0])
+        angles = contour_angles(x, y)
+        expected = np.array([0, 180, 0, 0])
+        np.testing.assert_allclose(angles, expected, atol=1e-6)
+        # same test for a non-closed contour
+        x = x[:-1]
+        y = y[:-1]
+        angles = contour_angles(x, y)
+        expected = expected[:-1]  # Last angle is not defined for non-closed contour
+        np.testing.assert_allclose(angles, expected, atol=1e-6) 
+
+    def test_contour_angle_pentagon(self):
+        # Regular pentagon, 6 points (closed)
+        theta = np.linspace(0, 2*np.pi, 6)
+        x = np.cos(theta)
+        y = np.sin(theta)
+        angles = contour_angles(x, y)
+        expected_angle = 108.0  # Internal angle of regular pentagon
+        expected = np.full(len(x), expected_angle)
+        np.testing.assert_allclose(angles, expected, atol=1e-6)
+        # same test for a non-closed contour
+        x = x[:-1]
+        y = y[:-1]
+        angles = contour_angles(x, y)
+        expected = expected[:-1]  # Last angle is not defined for non-closed contour
+        np.testing.assert_allclose(angles, expected, atol=1e-6) 
+
 
 
 # --------------------------------------------------------------------------------}

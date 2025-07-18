@@ -16,10 +16,11 @@ class TestAirfoilLib(unittest.TestCase):
         self.assertTrue(np.allclose(y[0], y[-1]))
 
         # Split surfaces
-        IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y)
-        self.assertTrue(len(IUpper) > 0)
-        self.assertTrue(len(ILower) > 0)
-        self.assertTrue(len(ITE) > 0)
+        for method in ['xmax', 'angle']:
+            IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y, method=method)
+            np.testing.assert_array_equal(IUpper, [0, 1, 2])
+            np.testing.assert_array_equal(ILower, [2,3,4])
+            np.testing.assert_array_equal(ITE, [4,0])
 
     def test_resample_refine(self):
         def test(*args, factor_surf=3, **kwargs):
@@ -50,36 +51,70 @@ class TestAirfoilLib(unittest.TestCase):
         test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
 
     def test_trailing_edge_angle(self):
-        def test(*args, **kwargs):
+        def test(*args, expected=0, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
             x_new, y_new = normalize_airfoil_coords(x, y)
             angle_deg, result = airfoil_trailing_edge_angle(x_new, y_new, plot=False)
             #self.assertIsInstance(angle_deg, float)
             #self.assertGreaterEqual(angle_deg, 0.0)
-            #self.assertLessEqual(angle_deg, 180.0)
+            np.testing.assert_almost_equal(angle_deg, expected, decimal=2)
             return angle_deg
 
-        angle = test('diamond')
-        angle = test('naca0012', sharp=False)
-        angle = test('naca0012', sharp=True)
-        angle = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
+        angle = test('diamond', expected=90)
+        angle = test('naca0012', sharp=False, expected=15.91)
+        angle = test('naca0012', sharp=True, expected=16.47)
+        angle = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=3.49)
         #plt.show()
 
     def test_leading_edge_radius(self):
         # NOTE: LEADING EDGE RADIUS IS NOT FINISHED
-        def test(*args, **kwargs):
+        def test(*args, expected=0, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
             x_new, y_new = normalize_airfoil_coords(x, y)
             r, result = airfoil_leading_edge_radius(x_new, y_new, plot=False)
-            #self.assertGreater(r, 0.0)
+            #self.assertAlmostEqual(r, expected)
             return r
 
-        r = test('diamond')
-        r = test('naca0012', sharp=False)
-        r = test('naca0012', sharp=True)
-        r = test(os.path.join(scriptDir, '../data/airfoils/S809.csv'))
-        r = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'))
+        test('diamond', expected=0)
+        test('naca0012', sharp=False, expected=0)
+        test('naca0012', sharp=True, expected=0)
+        test(os.path.join(scriptDir, '../data/airfoils/S809.csv'), expected=0)
+        test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=0)
         #plt.show()
+
+
+    def test_ITE(self):
+        def test(*args, method='xmax', expected=None, **kwargs):
+            x, y = airfoil_get_xy(*args, **kwargs)
+            x_new, y_new = normalize_airfoil_coords(x, y)
+            _,_,ITE,_ = airfoil_split_surfaces(x_new, y_new, method=method)
+            np.testing.assert_array_equal(ITE, expected)
+
+        for method in ['xmax', 'angle']:
+            test('diamond',  expected=[4, 0], method=method); 
+            test('naca0012', expected=[300, 301, 0], method=method, sharp=False)
+            test('naca0012', expected=[300, 0], method=method, sharp=True)
+            test(os.path.join(scriptDir, '../data/airfoils/S809.csv'), expected=[65, 0], method=method)
+            test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=[199, 200, 201, 0], method=method)
+        method = 'angle'
+        test(os.path.join(scriptDir, '../data/airfoils/blunt_not_straight.csv'), expected=np.concatenate((np.arange(499,524), [0])), method=method)
+
+    def test_te_type(self):
+        def test(*args, method='xmax', expected='sharp', **kwargs):
+            x, y = airfoil_get_xy(*args, **kwargs)
+            x_new, y_new = normalize_airfoil_coords(x, y)
+            TEtype = airfoil_TE_type(x_new, y_new, method=method)
+            self.assertEqual(TEtype, expected)
+            return TEtype
+
+        for method in ['xmax', 'angle']:
+            test('diamond',  method=method, expected='sharp'); 
+            test('naca0012', method=method, expected='blunt', sharp=False)
+            test('naca0012', method=method, expected='sharp', sharp=True)
+            test(os.path.join(scriptDir, '../data/airfoils/S809.csv'), method=method, expected='sharp')
+            test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), method=method, expected='blunt')
+        method = 'angle'
+        test(os.path.join(scriptDir, '../data/airfoils/blunt_not_straight.csv'), expected='blunt', method=method)
 
 
 if __name__ == '__main__':

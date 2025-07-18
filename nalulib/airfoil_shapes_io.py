@@ -18,6 +18,8 @@ FORMAT_TO_EXT = {
 }
 EXT_TO_FORMAT = {
     'csv': 'csv',
+    'txt': 'csv',
+    'dat': 'csv',
     'fmt': 'plot3d',
     'xyz': 'plot3d',
     'xy': 'plot3d',
@@ -36,8 +38,8 @@ def read_airfoil(filename, format=None, **kwargs):
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File {filename} does not exist.") 
     if format is None:
-        _, ext = os.path.splitext(filename)
-        format = ext.strip('.')
+        ext = os.path.splitext(filename)[1].lower().strip('.')
+        format = EXT_TO_FORMAT[ext]
     format = format.lower()
 
     if format in ['csv','tab']:

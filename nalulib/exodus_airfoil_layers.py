@@ -287,7 +287,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
             print(f"Layer {i:4d}: "
                 f"r={avg_radius:5.2f} - "
                 f"y={cumulative_avg_height:8.5f} - "
-                f"dy:(min={min_distance:.6f}, avg={avg_distance:.6f}, max={max_distance:.6f}) - "
+                f"dy:(min={min_distance:8.2e}, avg={avg_distance:8.2e}, max={max_distance:8.2e}) - "
                 f"Growth=({avg_growth:.3f}, min={min_growth:.3f}, max={max_growth:.3f})")
 
     with Timer('Outputs', silent = not profiler):
@@ -332,6 +332,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
                 figfilename = basefilename + f"{output_prefix}_layers.pdf"
                 plt.savefig(figfilename)
                 print( 'Written layer figure     :', figfilename)
+            plt.show()
 
     if conversion_needed:
         # Delete output_file

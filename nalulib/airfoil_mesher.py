@@ -37,7 +37,7 @@ class NormalizedAirfoilShape():
         self.output_closed = True
         self.output_counterclockwise = True
 
-        self._TE_type = airfoil_TE_type(self._x, self._y, closed=True)
+        self._TE_type = airfoil_TE_type(self._x, self._y)
         self._split_surfaces()
 
     def copy(self):

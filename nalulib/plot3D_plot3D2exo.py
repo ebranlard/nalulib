@@ -57,52 +57,6 @@ def _plt3d_to_quads(input_file):
 
     return xyz_2d, conn, sideset_names, sideset_cells, sideset_sides 
 
-def _write_airfoil2d(input_file, output_file=None, flatten=True, debug=False):
-    """ Ganesh implementation """
-    print('--------------------------------------------------------------------')
-    if not flatten:
-        raise NotImplementedError('Not flatten')
-
-    if output_file is None:
-        output_file = os.path.splitext(input_file)[0] + "_GAN.exo"
-        if flatten:
-            output_file = rename_n(output_file, nSpan=1)
-
-    ndim = 2
-    type = 'QUAD'
-    block_names = ['fluid']
-
-    xyz_2d, conn, sideset_names, sideset_cells, sideset_sides = _plt3d_to_quads(input_file)
-
-    if debug:
-        print('Coords 1 ', xyz_2d[0,:])
-        print('Coords 2 ', xyz_2d[1,:])
-        print('Coords -2', xyz_2d[-2,:])
-        print('Coords -1', xyz_2d[-1,:])
-        print('Conn 1 ', conn[0,:] -1)
-        print('Conn 2 ', conn[1,:] -1)
-        print('Conn -2', conn[-2,:]-1)
-        print('Conn -1', conn[-1,:]-1)
-
-    node_count = len(xyz_2d)
-    cell_count = len(conn)
-
-
-    with ExodusIIFile(output_file, mode="w") as exof:
-        exof.put_init('airfoil', ndim, node_count, cell_count,
-                      len(block_names), 0, 3) #len(sideset_names))
-        exof.put_coord(xyz_2d[:,0], xyz_2d[:,1], np.zeros_like(xyz_2d[:,0]))
-        exof.put_coord_names(["X", "Y"])
-        exof.put_element_block(1, 'QUAD', cell_count, 4)
-        exof.put_element_block_name(1, 'Flow-QUAD')
-        exof.put_element_conn(1, conn)
-        # Side sets
-        for i in range(len(sideset_names)):
-            exof.put_side_set_param(i+1, len(sideset_cells[i]))
-            exof.put_side_set_name(i+1, sideset_names[i])
-            exof.put_side_set_sides(i+1, sideset_cells[i], sideset_sides[i])
-    print('Output file:', output_file)
-    print('--------------------------------------------------------------------')
 
 def build_simple_hex_connectivity(dims):
     """
@@ -331,9 +285,6 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
                  legacy=False
                  ):
     if legacy:
-        # inlet_name = "inflow"
-        # outlet_name= "outflow"
-        # block_base = "fluid"
         plt3d2exo_legacy(input_file, output_file, block_base=block_base, inlet_name=inlet_name, outlet_name=outlet_name)
         return
 

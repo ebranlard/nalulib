@@ -29,6 +29,7 @@ try:
 except:
     pass
 
+_DEFAULT_ITE_METHOD='angle'
 
 _DEFAULT_REL_TOL=0.000001
 
@@ -166,23 +167,26 @@ def airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseErr
     return all(checks)
 
 
-def airfoil_TE_type(x, y, closed=True):
+def airfoil_TE_type(x, y, method=_DEFAULT_ITE_METHOD, ITE=None):
     """ Detects the type of trailing edge (TE) of an airfoil contour."""
+    closed = contour_is_closed(x, y)
     if closed:
         nSharp=2
     else:
         nSharp=1
     # --- Find TE points
-    IXmax = np.where(x == np.max(x))[0]
-    if len(IXmax) == nSharp:
+    if ITE is None:
+        _, _, ITE, _ = airfoil_split_surfaces(x, y, method=method)
+    #IXmax = np.where(x == np.max(x))[0]
+    if len(ITE) == nSharp:
         # TODO cusps, based on y
         return 'sharp'
-    elif len(IXmax) >= nSharp+1:
+    elif len(ITE) >= nSharp+1:
         return 'blunt'
     else:
         raise ValueError("No trailing edge found in the airfoil coordinates.")
 
-def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=_DEFAULT_ITE_METHOD):
     """
     Split an airfoil contour into upper and lower surfaces, and find leading edge (LE) and trailing edge (TE) indices.
     This assumes that the contour is closed and counterclockwise.
@@ -194,13 +198,58 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
         raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
     
     # --- TE indices
-    # From lower TE to upper TE (if blunt). Upper TE should always be 0
-    # 2 points if sharp TE, 3 or more if blunt TE
-    IXmax = np.where(x == np.max(x))[0]
-    ITE = np.concatenate((IXmax[1:], [IXmax[0]]))
-    #print('>>> ITE indices:', ITE)
+    if method=='xmax':
+        # From lower TE to upper TE (if blunt). Upper TE should always be 0
+        # 2 points if sharp TE, 3 or more if blunt TE
+        IXmax = np.where(x == np.max(x))[0]
+        ITE = np.concatenate((IXmax[1:], [IXmax[0]]))
+        #print('>>> ITE indices:', ITE)
+    elif method=='angle':
+        # find indices where a large angle change occurs
+        ILarge = find_te_indices_by_angle(x, y, verbose=False)
+        xmax = np.max(x)
+        chord = xmax-np.min(x)
+        # Only keep the ones that are withing 90% of the x-length 
+        #print(ILarge, len(x)-1)
+        ILarge = [i for i in ILarge if x[i] >= xmax - 0.1 * chord]
+        #print('ILarge',ILarge, len(x)-1)
+        if len(ILarge) == 0:
+            raise ValueError("No TE candidates found by angle method.")
+        elif len(ILarge) == 1:
+            raise ValueError("One TE candidates found by angle method.")
+        elif len(ILarge) == 2:
+            # Sharp TE: first and last point
+            ITE = np.array([len(x)-1, 0])
+        elif len(ILarge) > 2:
+            # Blunt TE: use two points with largest angles
+            iiymin = np.argmin(y[ILarge])
+            iiymax = np.argmax(y[ILarge])
+            te1 = ILarge[iiymin]
+            te2 = ILarge[iiymax]
+            # Assign lower/upper TE by y value
+            if y[te1] < y[te2]:
+                lower_te, upper_te = te1, te2
+            else:
+                lower_te, upper_te = te2, te1
+            # Collect all indices from lower_te to upper_te (counterclockwise)
+            if lower_te < upper_te:
+                ITE = np.arange(lower_te, upper_te+1)
+            else:
+                # Wrap around
+                ITE = np.concatenate((np.arange(lower_te, len(x)), np.arange(0, upper_te+1)))
+            # Ensure upper TE is 0 if possible
+            if upper_te != 0:
+                ITE = np.roll(ITE, -np.where(ITE==0)[0][0])
+            #print('ITE',ITE)
+        else:
+            raise ValueError("Unexpected number of TE candidates found by angle method.")
+    else:
+        raise NotImplementedError(f"Method '{method}' is not implemented for finding TE indices.")
+
     assert ITE[-1] == 0, "Last TE index should be 0, but got {}".format(ITE[-1])
     assert ITE[-2] == len(x)-1, "Second last TE index should be the last point, but got {}".format(ITE[-2])
+    # assert that ITE, when sorted, form a contiuous set (without the 0)
+    assert np.all(np.diff(ITE[:-1]) == 1), "ITE indices are not continuous."
 
     # --- Find LE point
     IXmin = np.where(x == np.min(x))[0]
@@ -220,6 +269,24 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     assert np.all(IAll == np.arange(len(x))), "Indices do not match the length of x and y arrays."
 
     return IUpper, ILower, ITE, iLE
+
+def find_te_indices_by_angle(x, y, angle_threshold=60, verbose=False):
+    """
+    Alternative method to find trailing edge (TE) indices by computing the angle at each point between its neighbors.
+    Points with an angle > angle_threshold (degrees) are considered TE candidates.
+    Returns a list of TE indices.
+    """
+    from nalulib.curves import contour_angles
+    angles = contour_angles(x, y)
+    if verbose:
+        print('angles', np.around(angles,1))
+        print('angles', np.around(np.abs(angles-180),1))
+    te_indices = np.where( np.abs(angles-180) > angle_threshold)[0]
+    if verbose:
+        print(f"[find_te_indices_by_angle] TE indices (angle > {angle_threshold}): {te_indices} ({len(x)-1})")
+        print(f"[find_te_indices_by_angle] Angles at TE indices: {angles[te_indices]}")
+    return te_indices.tolist()
+
 
 
 def airfoil_trailing_edge_angle(x, y, plot=False):
@@ -603,10 +670,6 @@ def resample_airfoil_spline(x, y, IUpper, ILower, ITE, n_surf=1000, kind='cubic'
     return x_new, y_new
 
 
-
-
-
-
 # --------------------------------------------------------------------------------}
 # --- CFD checks
 # --------------------------------------------------------------------------------{
@@ -694,16 +757,6 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
 
 
 
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # --- Plot  Airfoil library
 # ---------------------------------------------------------------------------
@@ -712,6 +765,7 @@ def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None
     airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
 
     IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False)
+    TE_type = airfoil_TE_type(x, y, ITE=ITE)
     xu,  yu  = x[IUpper], y[IUpper]      
     xl,  yl  = x[ILower], y[ILower]
     xTE, yTE = x[ITE]   , y[ITE]
@@ -723,12 +777,13 @@ def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
 
     # Main plot
-    ax.plot(x, y, sty, label=label)
+    ax.plot(x, y, sty, label=label, ms=5)
+
 
     if not simple:
-        ax.plot(xu , yu,   '-o', label='Upper surface', markerfacecolor='none', markersize=8)
-        ax.plot(xl , yl,   '-d', label='Lower surface', markerfacecolor='none', markersize=7)     
-        ax.plot(xTE, yTE, '-x', label='Trailing edge', markerfacecolor='none', markersize=6)
+        ax.plot(xu , yu,   '-', label=f'Upper surface (n={len(xu)-2})', markerfacecolor='none', markersize=8)
+        ax.plot(xl , yl,   '-', label=f'Lower surface (n={len(xl)-2})', markerfacecolor='none', markersize=7)     
+        ax.plot(xTE, yTE, '-x', label=f'Trailing edge (n={len(xTE)}, {TE_type})' , markerfacecolor='none', markersize=6)
         ax.plot(xLE, yLE, '^',  label='Leading edge', markerfacecolor='none', markersize=6)
 
 
@@ -746,7 +801,7 @@ def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None
     ax.set_ylabel('y')
     ax.legend()
     ax.set_aspect( 'equal' )
-    ax.set_title(title)
+    ax.set_title(title + f' n={len(x)} {TE_type} TE')
     return ax
 
 
