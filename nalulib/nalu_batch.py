@@ -4,7 +4,7 @@ from nalulib.essentials import myprint
 
 
 def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False, jobname=None):
-    """ """
+    """ Create a batch file for a nalu simulation based on a template and a cluster"""
     if batch_file_template is None:
         if cluster == 'unity':
             batch_file_template = os.path.dirname(__file__) + '/_template_submit-unity.sh'

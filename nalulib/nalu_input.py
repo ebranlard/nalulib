@@ -4,38 +4,79 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import StringIO
+
+import yaml
 import ruamel.yaml
+from ruamel.yaml.comments import CommentedMap
 
-class RuamelYamlEditor:
-    def __init__(self, filepath):
+# Recursively sort keys in mappings
+def sort_keys(obj):
+    if isinstance(obj, dict):
+        sorted_map = CommentedMap()
+        for k in sorted(obj):
+            sorted_map[k] = sort_keys(obj[k])
+            # preserve comments for each key
+            if hasattr(obj, 'ca') and k in obj.ca.items:
+                sorted_map.ca.items[k] = obj.ca.items[k]
+        # preserve overall comments
+        if hasattr(obj, 'ca'):
+            sorted_map.ca.comment = obj.ca.comment
+        return sorted_map
+    elif isinstance(obj, list):
+        return [sort_keys(i) for i in obj]
+    else:
+        return obj
+
+class YamlEditor:
+    def __init__(self, filepath, reader='ruamel'):
         self.filepath = filepath
-        self.yaml = ruamel.yaml.YAML()
-        self.yaml.preserve_quotes = True
-        with open(filepath, 'r', encoding='utf-8') as f:
-            f.seek(0)
-            self.data = self.yaml.load(f)
+        self.reader=reader
 
-    @property
-    def lines(self):
+        if self.reader=='ruamel':
+            self.yaml = ruamel.yaml.YAML()
+            self.yaml.preserve_quotes = True
+            with open(filepath, 'r', encoding='utf-8') as fid:
+                fid.seek(0)
+                self.data = self.yaml.load(fid)
+        else:
+            with open(filepath, 'r', encoding='utf-8') as fid:
+                self.data = yaml.safe_load(fid)
+
+    def lines(self, sort=False):
+        if sort:
+            data = sort_keys(self.data)
+        else:
+            data = self.data
+
         buf = StringIO()
-        self.yaml.dump(self.data, buf)
+        self.yaml.dump(data, buf)
         return buf.getvalue().splitlines(keepends=True)
 
-    def save(self, outpath=None):
-        with open(outpath or self.filepath, 'w', encoding='utf-8') as f:
-            f.writelines(self.lines)
+    def save(self, outpath=None, sort=False):
+        with open(outpath or self.filepath, 'w', encoding='utf-8') as fid:
+            if self.reader=='ruamel':
+                fid.writelines(self.lines(sort=sort))
+            else:
+                yaml.dump(self.data, fid, default_flow_style=False)
 
     def print(self, context=True, line=True):
-        for i, l in enumerate(self.lines):
+        """ Convenient function to show context"""
+        for i, l in enumerate(self.lines()):
             c = ""
             if line:
                 l = "{:50s}".format(l.rstrip())
             else:
                 l = ""
-            if context:
-                c = '# ' + str(self.get_context(i))
+            #if context:
+            #    c = '# ' + str(self.get_context(i))
             print(f"{i}: {l} {c}")
 
+
+class NALUInputFile(YamlEditor):
+
+    def __init__(self, filepath, reader='ruamel'):
+        """ Initialize NALUInputFile with a YAML file path """
+        super().__init__(filepath=filepath, reader=reader)
 
     def extract_mesh_motion(self, plot=False, csv_file=None, export=False):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
@@ -130,9 +171,9 @@ class RuamelYamlEditor:
         
         if plot:
             plt.figure()
-            plt.plot(df['Time [s]'], df['angle'], "g", label="theta [deg]")
-            plt.plot(df['Time [s]'], df['x'], "r", label="x [m]")
-            plt.plot(df['Time [s]'], df['y'], "b", label="y [m]")
+            plt.plot(df['Time [s]'], df['angle'], "-", label="theta [deg]")
+            plt.plot(df['Time [s]'], df['x'], "-", label="x [m]")
+            plt.plot(df['Time [s]'], df['y'], "-", label="y [m]")
             plt.plot(df['Time [s]'], df['ox'], "--", label="ox [m]")
             plt.plot(df['Time [s]'], df['oy'], "--", label="oy [m]")
             plt.xlabel("t")
@@ -144,20 +185,21 @@ class RuamelYamlEditor:
 
 
         #return types, angles, start_times, end_times, axes, origins, theta_deg_array, time_array
-        return time_array, x, y, theta_deg_array
+        return df
 
 
 
 
-NALUInputFile = RuamelYamlEditor
 
 
 
 if __name__ == '__main__':
 
     #yml = NALUInputFile('input2.yaml')
-    #yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
-    yml = NALUInputFile('_mesh_motion/input_restart.yaml')
-    yml.extract_mesh_motion(plot=True, export=True)
+    yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
+    #yml = NALUInputFile('_mesh_motion/input_restart.yaml')
+    #yml.extract_mesh_motion(plot=True, export=True)
+
+    yml.print()
 
     pass
