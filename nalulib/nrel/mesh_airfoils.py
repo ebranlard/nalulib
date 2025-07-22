@@ -24,7 +24,10 @@ def create_plot3d_surface(coords_file, surface_file):
     """
     base, ext = os.path.splitext(coords_file)
     print('ext',ext)
-    if ext.lower()=='.csv':
+    if ext.lower()=='.fmt':
+        raise Exception('Should not happen')
+        print('[INFO] Input already in fmt, do nothing')
+    elif ext.lower()=='.csv':
         df = pd.read_csv(coords_file)
         x = df.iloc[:,0].values
         y = df.iloc[:,1].values
@@ -50,8 +53,11 @@ def create_plot3d_surface(coords_file, surface_file):
 
 def extrude_airfoil(coords_file, N, s0, marchDist):
     base, ext = os.path.splitext(coords_file)
-    surface_file = base+"_temp_surface.fmt"
-    create_plot3d_surface(coords_file, surface_file)
+    if ext.lower()=='.fmt':
+        surface_file = coords_file
+    else:
+        surface_file = base+"_temp_surface.fmt"
+        create_plot3d_surface(coords_file, surface_file)
 
     options = {
         # ---------------------------
@@ -86,6 +92,8 @@ def extrude_airfoil(coords_file, N, s0, marchDist):
         "kspMaxIts": 1500,
         "kspSubspaceSize": 50,
     }
+    for k,v in options.items():
+        print('{:27s}: {}'.format(k,v))
 
     from pyhyp import pyHyp
     hyp = pyHyp(options=options)
@@ -98,8 +106,8 @@ def extrude_airfoil(coords_file, N, s0, marchDist):
     plt3d2exo(plot3d_volume_file)
 
     # Remove temporary files
-    os.remove(surface_file)
-    os.remove(plot3d_volume_file)
+    #os.remove(surface_file)
+    #os.remove(plot3d_volume_file)
 
 
 if __name__ == "__main__":
