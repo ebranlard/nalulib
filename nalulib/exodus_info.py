@@ -4,6 +4,37 @@ from nalulib.essentials import *
 from nalulib.exodus_core import quad_is_positive_about_z
 from nalulib.exodusii.file import ExodusIIFile
 
+def exodus_get_names(filename, lower=False):
+    """
+    Get the names of the blocks, side sets, and variables in an Exodus file.
+
+    :param filename: Path to the Exodus file.
+    :return: A dictionary with block names, side set names, and variable names.
+    """
+    with ExodusIIFile(filename, mode="r") as exo:
+        block_names = exo.get_element_block_names()
+        side_set_names = exo.get_side_set_names()
+        glob_var = exo.get_global_variable_names()
+        elem_var = exo.get_element_variable_names()
+        node_var = exo.get_node_variable_names()
+        edge_var = exo.get_edge_variable_names()
+        face_var = exo.get_face_variable_names()
+
+    names = {
+        "blocks": block_names,
+        "side_sets": side_set_names,
+        "global_variables": glob_var,
+        "element_variables": elem_var,
+        "node_variables": node_var,
+        "edge_variables": edge_var,
+        "face_variables": face_var
+    }
+    if lower:
+        # return lower cases names
+        names = {k: [name.lower() for name in v] for k, v in names.items()}
+    return names
+
+
 def explore_exodus_file(filename, n=5, nss=10):
     print(f"Filename:                 {filename}")
     with ExodusIIFile(filename, mode="r") as exo:

@@ -17,6 +17,7 @@ setup(
             'exo-layers=nalulib.cli:exo_layers',
             'nalu-restart=nalulib.cli:nalu_restart',
             'nalu-aseq=nalulib.cli:nalu_aseq',
+            'nalu-input=nalulib.cli:nalu_input_CLI',
             'gmsh2exo=nalulib.cli:gmsh2exo',
             'plt3d2exo=nalulib.cli:plt3d2exo_CLI',
             'arf-convert=nalulib.cli:convert_airfoil_CLI',

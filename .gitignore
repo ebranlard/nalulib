@@ -2,6 +2,7 @@
 
 *.exo
 _*
+!__init__.py
 *.msh
 
 code

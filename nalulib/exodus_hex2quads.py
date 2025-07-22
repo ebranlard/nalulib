@@ -75,12 +75,15 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False,
 
     # Process each face that lies on the z_ref plane
     with Timer('Processsing faces', silent=not profiler, writeBefore=True):
+        nOrientWrong = 0
         for elem_idx, face_idx in elements_with_faces:
             face_nodes_ids = all_faces[elem_idx, face_idx]
             sorted_face = tuple(sorted(face_nodes_ids)) # To ensure uniqueness, we sort and create a tuple
             if sorted_face not in sorted_quads_set:
                 if not quad_is_positive_about_z(face_nodes_ids, node_coords) and check_zpos:
-                    print('[WARN] Face is oriented negatively about Z, reorienting it:', face_nodes_ids)
+                    nOrientWrong += 1
+                    if debug:
+                        print('[WARN] Face is oriented negatively about Z, reorienting it:', face_nodes_ids)
                     face_nodes_ids = [face_nodes_ids[3], face_nodes_ids[2], face_nodes_ids[1], face_nodes_ids[0]]  # Reverse the order
                 # Add the original face to the quads list
                 quad = {
@@ -100,6 +103,8 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False,
                         for node in face_nodes_ids]
                     )
                     print(f"  Face {face_idx} of element {filtered_elem_ids[elem_idx]}: {node_coords_str}")
+        if nOrientWrong > 0:
+            print(f"[WARN] {nOrientWrong}/{len(elements_with_faces)} faces were oriented negatively about Z and have been reoriented.")
 
     #if check_zpos:
     #    conn= force_quad_positive_about_z(conn, coords, verbose=True)
