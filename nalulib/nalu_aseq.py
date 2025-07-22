@@ -15,7 +15,8 @@ from nalulib.exodus_rotate import rotate_exodus
 
 
 
-def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname=''):
+def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
+        inlet_name='inlet', outlet_name='outlet', block_base='fluid'):
     myprint('Input YAML file', input_file)
     # Basename
     base_dir = os.path.dirname(input_file)
@@ -64,7 +65,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     angles = aseq - aoa_ori
     mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
-    rotate_exodus(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose)
+    rotate_exodus(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name)
     print('----------------------------------------------------------------------------')
 
 
@@ -121,6 +122,11 @@ def nalu_aseq():
     parser.add_argument("-j", "--jobname", default='', help="Jobname prefix (optional)")
     parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel"], help="Cluster type")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+
+    parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
+    parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
+    #parser.add_argument("--block-base", type=str, default="fluid", help="Base name for the block (default: 'fluid', alternative: 'Flow').")
+
     args = parser.parse_args() 
     if args.verbose:
         print('Arguments:', args)
@@ -132,7 +138,10 @@ def nalu_aseq():
         verbose=args.verbose,
         batch_file=args.batch_file,
         cluster=args.cluster,
-        jobname=args.jobname
+        jobname=args.jobname,
+        inlet_name=args.inlet_name,
+        outlet_name=args.outlet_name,
+        #block_base=args.block_base,
     )
 
 if __name__ == "__main__":
