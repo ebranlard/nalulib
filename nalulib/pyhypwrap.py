@@ -230,21 +230,21 @@ def pyhyp_cmdline_CLI():
 
     if args.verbose:
         print('Arguments received:')
-        print(f"Input file      : {args.input}")  
-        print(f"Output file     : {args.output}")
-        print(f"Grid parameter N: {options['N']}")
-        print(f"reynolds        : {args.re}")
-        print(f"s0              : {options.get('s0')}")
-        print(f"marchDist       : {options.get('marchDist')}")
-        print(f"ps0             : {options.get('ps0')}")
-        print(f"pGridRatio      : {options.get('pGridRatio')}")
-        print(f"cMax            : {options.get('cMax')}")
-        print(f"epsE            : {options.get('epsE')}")
-        print(f"epsI            : {options.get('epsI')}")
-        print(f"theta           : {options.get('theta')}")
-        print(f"volCoef         : {options.get('volCoef')}")
-        print(f"volBlend        : {options.get('volBlend')}")
-        print(f"volSmoothIter   : {options.get('volSmoothIter')}")
+        print(f"       Input file      : {args.input}")  
+        print(f"       Output file     : {args.output}")
+        print(f"       Grid parameter N: {options['N']}")
+        print(f"       reynolds        : {args.re}")
+        print(f"       s0              : {options.get('s0')}")
+        print(f"       marchDist       : {options.get('marchDist')}")
+        print(f"       ps0             : {options.get('ps0')}")
+        print(f"       pGridRatio      : {options.get('pGridRatio')}")
+        print(f"       cMax            : {options.get('cMax')}")
+        print(f"       epsE            : {options.get('epsE')}")
+        print(f"       epsI            : {options.get('epsI')}")
+        print(f"       theta           : {options.get('theta')}")
+        print(f"       volCoef         : {options.get('volCoef')}")
+        print(f"       volBlend        : {options.get('volBlend')}")
+        print(f"       volSmoothIter   : {options.get('volSmoothIter')}")
     
     output_file_fmt = args.output+'_fmt'
     output_file_exo = args.output
@@ -311,7 +311,7 @@ def pyhyp_cmdline_CLI():
         if input_file_tmp is not None and os.path.exists(input_file_tmp):
             os.remove(input_file_tmp)
             print('>>> Removed temporary input file:', input_file_tmp)
-
+    print(f"[INFO] s0 used: {options.get('s0')}")
 
 
 

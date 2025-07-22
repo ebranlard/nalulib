@@ -15,18 +15,22 @@ pip install -e .
 ## Command line tools 
 After performing the pip install, the following tools should be accessible from the command line:
 
- - `arf-convert`: convert an airfoil from one format to another (e.g. csv to plot3d or pointwise)
- - `arf-mesh`: mesh an airfoil surface (2D)
- - `pyhyp`: perform mesh extrusion of an airfoil
- - `exo-info`: print info about an exodus file
+ - `arf-plot`: plot an airfoil for any supported format, standardize coordinates and orientation.
+ - `arf-convert`: convert an airfoil from one format to another (e.g. csv to plot3d or pointwise).
+ - `arf-mesh`: mesh an airfoil surface (2D).
+ - `pyhyp`: perform mesh extrusion of an airfoil into a quasi-O-Mesh.
+ - `exo-info`: print info about an exodus file.
  - `exo-flatten`: flatten a 3D mesh into a 2D mesh (along z, preserves side-sets)
  - `exo-zextrude`: extrude a 2D mesh into a 3D mesh (along z, preserve side-sets)
- - `exo-rotate`: rotate a 2D/3D mesh about a point, can change or preserve side sets
- - `exo-layers`: extract and display information (thickness, growth) for layers about the wing sideset
- - `nalu-restart`: write a new yaml file and slurm script based on latest time found in restart file
- - `nalu-aseq`: write, meshes, yaml files and slurm scripts  for a sequence of angle of attack
+ - `exo-rotate`: rotate a 2D/3D mesh about a point, can change or preserve side sets.
+ - `exo-layers`: extract and display information (thickness, growth) for layers about the wing sideset.
+ - `nalu-input`: read, check, and optionally standardize a nalu-wind input file.
+ - `nalu-restart`: write a new yaml file and slurm script based on latest time found in restart file.
+ - `nalu-aseq`: write, meshes, yaml files and slurm scripts  for a sequence of angle of attack.
  - `gmsh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
  - `plt3d2exo`: convert a regular plot3d mesh file to exodus format (side-sets based on omesh angles). 
+
+
 
 
 Typical usage (minimal runnable example):

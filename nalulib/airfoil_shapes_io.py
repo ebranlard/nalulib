@@ -307,7 +307,27 @@ def write_airfoil_plot3d(x, y, filename, thick=False):
         dims = (len(x), 1, 1)  # Assuming a single slice in the z-direction
     write_plot3d(filename, coords, dims)
 
+def airfoil_plot(input_file, standardize=False, verbose=False):
+    from nalulib.airfoil_shapes_io import read_airfoil
+    import matplotlib.pyplot as plt
+    from nalulib.airfoillib import normalize_airfoil_coords
+    from nalulib.airfoillib import plot_airfoil
+    print('Reading: ', input_file)
+    x, y, d = read_airfoil(input_file)
+    if standardize:
+        print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
+        x, y = normalize_airfoil_coords(x, y, verbose=verbose)
+    plot_airfoil(x, y)
+    plt.show()
 
+def airfoil_plot_CLI():
+    import argparse
+    parser = argparse.ArgumentParser(description="Plot airfoil files for any supported formats (csv, plot3d, pointwise, geo, etc).")
+    parser.add_argument(      'input', type=str, help='Input airfoil file path')
+    parser.add_argument(      '--std' , action='store_true', help='Standardize the format so the coordinates are: looped, anticlockwise, and starting from the upper TE.')
+    args = parser.parse_args()
+    airfoil_plot(args.input, standardize=args.std)
+    
 
 def convert_airfoil_CLI():
     import argparse

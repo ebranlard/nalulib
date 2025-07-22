@@ -180,7 +180,7 @@ def force_quad_positive_about_z(conn, coords, verbose=False, ioff=1):
             nRev+= 1
     if nRev>0 or verbose:
         print(f"[INFO] Reversed {nRev}/{nquads} quads to ensure positive orientation about z.")
-        if nRev not in [0, nquad]:
+        if nRev not in [0, nquads]:
             raise Exception('Sanity check for now, we should likely reverse all or nothing')
     return conn
 
