@@ -92,12 +92,16 @@ def extrude_airfoil(coords_file, N, s0, marchDist):
         "kspMaxIts": 1500,
         "kspSubspaceSize": 50,
     }
+
+    print('############################## PYHYP ####################################')
+    print('Options:')
     for k,v in options.items():
         print('{:27s}: {}'.format(k,v))
 
     from pyhyp import pyHyp
     hyp = pyHyp(options=options)
     hyp.run()
+    print('########################## END PYHYP ####################################')
 
     airfoil_tag = os.path.basename(coords_file).split(".")[0]
     plot3d_volume_file = os.path.join("volume", f"{airfoil_tag}.xyz")

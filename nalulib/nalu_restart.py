@@ -153,7 +153,7 @@ def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, de
                 if nrun is None:
                     # --- Infer n restart from the file name
                     # Check if the last _2 is a number, if it is increment it, otherwise, add _2
-                    print('>>> sp' ,sp, sp[-1].isdigit())
+                    #print('>>> sp' ,sp, sp[-1].isdigit())
                     if sp[-1].isdigit():
                         nrun = int(sp[-1])+1
                         base= '_'.join(sp[:-1])

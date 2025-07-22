@@ -124,7 +124,7 @@ def explore_exodus_file(filename, n=5, nss=10):
             for i, elem_id in enumerate(element_ids[:ne]):
                 nodes = elem_conn[i]
                 if block_info.elem_type.lower() in ['quad']:
-                    orientation = {True: 'positive', False:'negative'}[quad_is_positive_about_z(nodes, node_coords)]
+                    orientation = {True: 'positive', False:'negative'}[quad_is_positive_about_z(nodes, node_coords, ioff=1)]
                     print(f"Element ID: {elem_id}, Node IDs: {nodes}, Orientation: {orientation}")
                 else:
                     print(f"Element ID: {elem_id}, Node IDs: {nodes}")

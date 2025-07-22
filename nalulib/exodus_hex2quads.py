@@ -49,14 +49,14 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False,
     quads = []  # List of unique quads
     quad2hex = {}  # Map each quad to its corresponding HEX element
     sorted_quads_set = set()  # Set to track sorted quads for uniqueness
-    elem_conn = np.array(exo.get_element_conn(block_id))  # Convert to NumPy array for slicing
+    elem_conn = np.array(exo.get_element_conn(block_id))  # Convert to NumPy array for slicing - IDs start at 1
     elem_ids = exo.get_element_id_map()  # Get the true element IDs for this block
 
     # Pre-filter elements that have at least one node in the z_ref plane
     with Timer('Filtering elements', silent=not profiler):
         mask = np.isin(elem_conn, nodes_id_in_plane).any(axis=1)
-        filtered_elem_conn = elem_conn[mask]
-        filtered_elem_ids = elem_ids[mask]  # Filter the element IDs accordingly
+        filtered_elem_conn = elem_conn[mask] # Connectivity IDs starts at 1
+        filtered_elem_ids = elem_ids[mask]   # Filter the element IDs accordingly, IDs start at 1
         if verbose:
             print(f"Number of hex            : {len(elem_conn)}")
             print(f"Number of hex close to z : {len(filtered_elem_conn)}")
@@ -77,10 +77,10 @@ def exo_hex_to_quads(exo, z_ref=None, verbose=True, debug=False, profiler=False,
     with Timer('Processsing faces', silent=not profiler, writeBefore=True):
         nOrientWrong = 0
         for elem_idx, face_idx in elements_with_faces:
-            face_nodes_ids = all_faces[elem_idx, face_idx]
+            face_nodes_ids = all_faces[elem_idx, face_idx] # IDs start at 1
             sorted_face = tuple(sorted(face_nodes_ids)) # To ensure uniqueness, we sort and create a tuple
             if sorted_face not in sorted_quads_set:
-                if not quad_is_positive_about_z(face_nodes_ids, node_coords) and check_zpos:
+                if not quad_is_positive_about_z(face_nodes_ids, node_coords, ioff=1) and check_zpos:
                     nOrientWrong += 1
                     if debug:
                         print('[WARN] Face is oriented negatively about Z, reorienting it:', face_nodes_ids)

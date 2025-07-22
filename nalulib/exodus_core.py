@@ -123,7 +123,7 @@ def write_exodus(filename, coords, conn, title="", verbose=True, side_sets=None,
     if verbose:
         print(f"Exodus file written: {filename}")
 
-def quad_is_positive_about_z(node_ids, coords):
+def quad_is_positive_about_z(node_ids, coords, ioff=1):
     """
     Checks if the 4 node IDs (for a quad face in the x-y plane) are ordered such that
     the normal vector points in the positive z direction (right-hand rule).
@@ -132,12 +132,15 @@ def quad_is_positive_about_z(node_ids, coords):
     Args:
         node_ids: list/array of 4 node indices (ordered as in the element connectivity)
         coords: (n_nodes, 3) array of node coordinates
+        ioff : typically, node_ids in Exodus start at 1, so for python indexing with offset by ioff=1
+               If node_ids use python indexing, then ioff=0, and the node_ids correspond 
+               directly to the index in coords
 
     Returns:
         True if the quad is ordered positively about z, False otherwise.
     """
     # Get the x, y coordinates of the quad
-    pts = np.asarray([coords[n-1][:2] for n in node_ids])
+    pts = np.asarray([coords[n-ioff][:2] for n in node_ids])
     # Compute the signed area (shoelace formula)
     area = 0.5 * (
         pts[0,0]*pts[1,1] + pts[1,0]*pts[2,1] + pts[2,0]*pts[3,1] + pts[3,0]*pts[0,1]
@@ -145,22 +148,40 @@ def quad_is_positive_about_z(node_ids, coords):
     )
     return area > 0
 
-def force_quad_positive_about_z(conn, coords, verbose=False):
+def force_quad_positive_about_z(conn, coords, verbose=False, ioff=1):
     """
     For each quad in conn, check if it is positive about z using quad_is_positive_about_z.
     If not, remap the connectivity from [0,1,2,3] to [3,2,1,0] 
     Modifies conn in-place and returns it.
     """
-    n=0
     nquads = conn.shape[0]
+    conn_min = np.min(conn)
+    if conn_min==0:
+        if ioff!=0:
+            # We force the user to think about the connectivity indexing
+            raise Exception("Connectivity starts at 0, ioff should be 0")
+    elif conn_min==1:
+        if ioff!=1:
+            raise Exception("Connectivity starts at 1 but ioff is 0, it's ok, but not currently anticipated. Contact dev")
+        pass # Hopefully the user knows
+        #ioff=1
+    else:
+        raise Exception('The code should work in that case, but such application are currently not anticipated. Contact dev.')
+
+    if np.max(conn)!=len(coords)+ioff-1:
+        raise Exception('[WARN] force_quad_positive_about_z is called with a connectivity that doesnt cover the nodes exactly. Connecitivyt min-max IDs [{} {}], number of coords: {}'.format(conn_min, np.max(conn), len(coords)-1+ioff))
+    #print('conn max', np.max(conn))
+    #print('conn max', len(coords)-1)
+    nRev=0
     for iquad in range(nquads):
-        if not quad_is_positive_about_z(conn[iquad], coords):
+        if not quad_is_positive_about_z(conn[iquad], coords, ioff=ioff):
             # Remap: [0,1,2,3] -> [3,2,1,0]
             conn[iquad] = [conn[iquad][3], conn[iquad][2], conn[iquad][1], conn[iquad][0]]
-            n+= 1
-    if verbose:
-        print(f"[INFO] Reversed {n}/{nquads} quads to ensure positive orientation about z.")
+            nRev+= 1
+    if nRev>0 or verbose:
+        print(f"[INFO] Reversed {nRev}/{nquads} quads to ensure positive orientation about z.")
     return conn
+
 
 
 # --------------------------------------------------------------------------

@@ -37,7 +37,6 @@ _DEFAULT_OPTIONS = {
     # ---------------------------
     #   Solution parameters
     # ---------------------------
-    "cMax": 6.0,
     "kspRelTol": 1e-10,
     "kspMaxIts": 1500,
     "kspSubspaceSize": 50,
@@ -198,7 +197,13 @@ def pyhyp_cmdline_CLI():
     parser.add_argument('--volCoef', type=float, help='Smoothing parameter volCoef')
     parser.add_argument('--volBlend', type=float, help='Smoothing parameter volBlend')
     parser.add_argument('--volSmoothIter', type=int, help='Smoothing parameter volSmoothIter')
+    parser.add_argument("--no-zpos-check", action="store_true", help="Do not check and enforce the orientation of quads about Z axis (default: check).")
+    parser.add_argument("--no-cleanup", action="store_true", help="Do not delete intermediary files.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
+
+    parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
+    parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
+    parser.add_argument("--block-base", type=str, default="fluid", help="Base name for the block (default: 'fluid', alternative: 'Flow').")
 
     args = parser.parse_args()
 
@@ -262,6 +267,9 @@ def pyhyp_cmdline_CLI():
 
     # --- Detect if pyhyp can be imported
     print('############################## PYHYP ####################################')
+    print('Options:')
+    for k,v in options.items():
+        print('{:27s}: {}'.format(k,v))
     try:
         from pyhyp import pyHyp
         # --- Run pyhyp
@@ -283,18 +291,26 @@ def pyhyp_cmdline_CLI():
         print('>>> Output file generated:', output_file_fmt)
     
     # --- Generate exodus file
-    plt3d2exo(output_file_fmt, output_file_exo, flatten=True)
+    check_zpos = not args.no_zpos_check
+
+    plt3d2exo(output_file_fmt, output_file_exo, flatten=True, check_zpos=check_zpos,
+        inlet_name=args.inlet_name,
+        outlet_name=args.outlet_name,
+        block_base=args.block_base,
+        )
+
     if not os.path.exists(output_file_exo):
         raise Exception('>>> Output file not generated:', output_file_exo)
     print('>>> Output file generated:', output_file_exo)
 
     # --- Cleanup
-    if os.path.exists(output_file_fmt):
-        os.remove(output_file_fmt)
-        print('>>> Removed temporary file:', output_file_fmt)    
-    if input_file_tmp is not None and os.path.exists(input_file_tmp):
-        os.remove(input_file_tmp)
-        print('>>> Removed temporary input file:', input_file_tmp)
+    if not args.no_cleanup:
+        if os.path.exists(output_file_fmt):
+            os.remove(output_file_fmt)
+            print('>>> Removed temporary file:', output_file_fmt)    
+        if input_file_tmp is not None and os.path.exists(input_file_tmp):
+            os.remove(input_file_tmp)
+            print('>>> Removed temporary input file:', input_file_tmp)
 
 
 

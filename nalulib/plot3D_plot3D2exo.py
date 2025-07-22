@@ -63,7 +63,7 @@ def build_simple_hex_connectivity(dims):
     Build a simple hexahedral connectivity for a single block.
     Assumes periodic/looping in i, j, k directions.
     Returns:
-        conn: (n_hex, 8) array of node indices
+        conn: (n_hex, 8) array of node indices - Minimum ID is 0!!!
     """
     ni, nj, nk = dims
     conn = []
@@ -93,14 +93,14 @@ def build_simple_quad_connectivity(dims, loop=True):
       - loop: if True, points are assumed to loop (e.g. around an airfoil), and the
                point connectivity is such that the last point of the loop is not repeated.
     Returns:
-        conn: (n_quad, 4) array of node indices
+        conn0: (n_quad, 4) array of node indices, 0-based indexing
     """
     ni, nk, nj = dims
 
     # This function will build quads between the two j-planes (for each i)
     # For dims=[22,2,6], ni=22, nj=2, nk=6
     # We want quads between j=0 and j=1 for all i, for each k
-    conn = np.zeros(((ni-1)*(nj-1),4),dtype=int)
+    conn0 = np.zeros(((ni-1)*(nj-1),4),dtype=int)
 
     nii = ni
     nii2 = ni-1
@@ -114,23 +114,23 @@ def build_simple_quad_connectivity(dims, loop=True):
             n1 = i     + (j+1) * nii
             n2 = (i+1) + (j+1) * nii
             n3 = (i+1) + (j  ) * nii 
-            conn[i + j * nii2] = [n0, n1, n2, n3]
+            conn0[i + j * nii2] = [n0, n1, n2, n3]
 
     if loop:
         # We need to fix the indices for the points that loops and were not added
         for j in range(nj-1):
-            conn[(nii-1) + j * nii] = [(nii-1) + j * nii, nii-1 + (j+1) * nii, (j+1) * nii, j * nii]
+            conn0[(nii-1) + j * nii] = [(nii-1) + j * nii, nii-1 + (j+1) * nii, (j+1) * nii, j * nii]
 
     #if loop:  # Legacy
     #    nx, nk, ny = dims
     #    nx = nx -1
-    #    conn = np.zeros((nx*(ny-1),4),dtype=int)
+    #    conn0 = np.zeros((nx*(ny-1),4),dtype=int)
     #    for j in range(ny-1):
     #        for i in range(nx-1):
-    #            conn[i + j * nx] = np.array([i + j * nx, i + (j+1) * nx, i+1 + (j+1) * nx, i+1 + j * nx ])
-    #        conn[(nx-1) + j * nx] = np.array([(nx-1) + j * nx, nx-1 + (j+1) * nx, (j+1) * nx, j * nx])
+    #            conn0[i + j * nx] = np.array([i + j * nx, i + (j+1) * nx, i+1 + (j+1) * nx, i+1 + j * nx ])
+    #        conn0[(nx-1) + j * nx] = np.array([(nx-1) + j * nx, nx-1 + (j+1) * nx, (j+1) * nx, j * nx])
 
-    return conn
+    return conn0
 
 def extract_z_plane(coords, dims, loop=True):
     """
@@ -168,9 +168,11 @@ def extract_z_plane(coords, dims, loop=True):
 
     return coords2d
 
-def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, inlet_name='inlet', outlet_name='outlet'):
+def find_side_sets(coords, conn0, dims, elem_type='QUAD', angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None, inlet_name='inlet', outlet_name='outlet'):
     """
     For a structured quad mesh, find the elements and face indices along the airfoil (first layer) and far-field (last layer).
+    INPUTS:
+      - conn0: connectivity, with 0-based indexing
     Returns a side_sets dict and elem_to_face_nodes mapping.
     """
     ni, nk, nj = dims
@@ -197,7 +199,7 @@ def find_side_sets(coords, conn, dims, elem_type='QUAD', angle_center=None, inle
     for i in range(n_elem_i):
         elem_id = (n_elem_j - 1) * n_elem_i + i  # last row
         farfield_sides.append(SIDE_FARFIELD)  
-        elem_to_face_nodes[(elem_id+1, SIDE_FARFIELD)] = np.array([id+1  for id in conn[elem_id]]) 
+        elem_to_face_nodes[(elem_id+1, SIDE_FARFIELD)] = np.array([id+1  for id in conn0[elem_id]]) 
         farfield_elements.append(elem_id + 1)
 
     side_sets_list = []
@@ -306,14 +308,14 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
             print("Flattening 3D mesh to 2D surface mesh..., loop=", loop)
         # Create a 2D mesh from the 3D coordinates
         coords = extract_z_plane(coords, dims, loop=loop)
-        conn =  build_simple_quad_connectivity(dims, loop=loop)
+        conn0 =  build_simple_quad_connectivity(dims, loop=loop)
         if check_zpos:
-            conn= force_quad_positive_about_z(conn, coords, verbose=True)
+            conn0 = force_quad_positive_about_z(conn0, coords, verbose=verbose, ioff=0)
 
         block_name = block_base+'-QUAD'; num_dim=2; elem_type='QUAD'
 
     else:
-        conn = build_simple_hex_connectivity(dims)
+        conn0 = build_simple_hex_connectivity(dims)
         block_name = block_base+'-HEX'; num_dim=3; elem_type='HEX'
 
 
@@ -322,21 +324,20 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
         print('Coords 2 ', coords[1,:])
         print('Coords -2', coords[-2,:])
         print('Coords -1', coords[-1,:])
-        print('Conn 1 ', conn[0,:] )
-        print('Conn 2 ', conn[1,:] )
-        print('Conn -2', conn[-2,:])
-        print('Conn -1', conn[-1,:])
+        print('Conn 1 ', conn0[0,:] )
+        print('Conn 2 ', conn0[1,:] )
+        print('Conn -2', conn0[-2,:])
+        print('Conn -1', conn0[-1,:])
 
 
     if verbose:
-        print("Number of elements:", conn.shape[0], '- nodes per element:', conn.shape[1])
+        print("Number of elements:", conn0.shape[0], '- nodes per element:', conn0.shape[1])
 
-    side_sets = find_side_sets(coords, conn, dims, elem_type=elem_type, 
+    side_sets = find_side_sets(coords, conn0, dims, elem_type=elem_type, 
                                angle_center=angle_center, inlet_start=inlet_start, inlet_span=inlet_span, outlet_start=outlet_start,
                                inlet_name=inlet_name, outlet_name = outlet_name
                                )
-    conn += 1
-    write_exodus(output_file, coords, conn, verbose=True, side_sets=side_sets, block_name=block_name, num_dim=num_dim, title='airfoil')
+    write_exodus(output_file, coords, conn0+1, verbose=True, side_sets=side_sets, block_name=block_name, num_dim=num_dim, title='airfoil')
 
     if debug and flatten:
         n=dims[0][0]
