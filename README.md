@@ -28,6 +28,7 @@ After performing the pip install, the following tools should be accessible from 
  - `nalu-input`: read, check, and optionally standardize a nalu-wind input file.
  - `nalu-restart`: write a new yaml file and slurm script based on latest time found in restart file.
  - `nalu-aseq`: write, meshes, yaml files and slurm scripts  for a sequence of angle of attack ("aseq").
+ - `nalu-forces`: plot/print nalu wind forces or forces coefficients.
  - `gmsh2exo`: convert a 3D gmesh file to exodus format (use physical surfaces as side-sets).
  - `plt3d2exo`: convert a regular plot3d mesh file to exodus format (side-sets based on omesh angles). 
 
@@ -69,13 +70,16 @@ exo-rotate   ./S809_omesh_n120.exo -a 30           # Rotate mesh by 30 deg
 exo-flatten  ./S809_omesh_n120.exo -o ./S809_omesh_n1_bis.exo  # Create 2D mesh (quads) from 3D mesh (hexs)
 ```
 
-### Generate a 2D polar with nalu-wind 
+### Generate a polar (multiple angle of attacks) with nalu-wind 
 
 ```bash
 cd examples
 pyhyp -i ../data/airfoils/S809.csv -o ./S809_omesh_n1.exo --re 3e6 -n 150 --marchDist 100 # mesh
 nalu-input input.yaml # check input file 
 nalu-aseq input.yaml -a -30 30 10 -j polar -b submit.sh # Create mesh, yaml, submit for polar
+naluX -i input_aoa0.0.yaml    # run nalu simulation
+nalu-forces forces_aoa0.csv --yaml input_aoa0.0.yaml # Plot forces coefficients
+nalu-forces forces_aoa*.csv --yaml input_aoa0.0.yaml # Plot polar
 ```
 
 ### Restart a nalu-wind simulation to the last checkpoint

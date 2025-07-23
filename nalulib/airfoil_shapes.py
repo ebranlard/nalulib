@@ -64,6 +64,8 @@ class StandardizedAirfoilShape():
     """
     def __init__(self, x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=False):
         # Store original info
+
+        self._ori_standardized = airfoil_is_standardized(x, y, raiseError=False)
         self._ori_start_point = (x[0], y[0])
         self._ori_orientation = contour_orientation(x, y)
         self._ori_closed = contour_is_closed(x, y, reltol=reltol)
@@ -231,11 +233,12 @@ class StandardizedAirfoilShape():
         s+='| * t_rel_max  :     {:.6f}\n'.format(self.t_rel_max)
         # Original attributes
         s+='|Properties of the original airfoil (before standardization):\n'
-        s+='| > _ori_n     : {:4d}\n'.format(len(self._ori_xy))
-        s+='| - _ori_closed: {}\n'.format(self._ori_closed)
-        s+='| - _ori_orientation: {}\n'.format(self._ori_orientation)   
-        s+='| - _ori_start_point: ({:.3f}, {:.3f})\n'.format(self._ori_start_point[0], self._ori_start_point[1])
-        s+='|Properties of the airfoil after standardization):\n'
+        s+='| > (original) number of points : {:4d}\n'.format(len(self._ori_xy))
+        s+='| > (original) standardized     : {}\n'.format(self._ori_standardized)
+        s+='| > (original) closed           : {}\n'.format(self._ori_closed)
+        s+='| > (original) orientation      : {}\n'.format(self._ori_orientation)   
+        s+='| > (original) start_point      : ({:.3f}, {:.3f})\n'.format(self._ori_start_point[0], self._ori_start_point[1])
+        s+='|Properties of the airfoil after standardization:\n'
         s+='| - x[0]={:.3f} x[-1]={:.3f}, xmax={:.3f}, xmin={:.3f},  dx~: {:.3f}, n: {} \n'.format(self.x[0], self.x[-1],np.max(self.x), np.min(self.x), np.mean(np.abs(self.x)), len(self.x))
         s+='| - y[0]={:.3f} y[-1]={:.3f}, ymax={:.3f}, ymin={:.3f},  dy~: {:.3f}, n: {} \n'.format(self.y[0], self.y[-1],np.max(self.y), np.min(self.y), np.mean(np.abs(self.y)), len(self.y))
         #s+='| * orientation: {}\n'.format(self.orientation)
@@ -688,8 +691,12 @@ def airfoil_info_CLI():
     arf = StandardizedAirfoilShape(x, y, name=args.name or args.input, verbose=args.verbose)
 
     print(arf)
+
     if args.plot:
         arf.plot()
-        import matplotlib.pyplot as plt
         plt.show()
+
+if __name__ == '__main__':
+
+    airfoil_info_CLI()
 

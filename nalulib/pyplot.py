@@ -7,10 +7,10 @@ import matplotlib
 #print('>>> DISPLAY:',  os.environ.get('DISPLAY'))
 #print('>>> backend:', matplotlib.get_backend().lower())
 
-is_headless = matplotlib.get_backend().lower() == 'agg' or True
+is_headless = matplotlib.get_backend().lower() == 'agg'
 
 if is_headless:
-    print('[INFO] Using plotext instead of matplolib')
+    #print('[INFO] Using plotext instead of matplotlib')
     import nalulib.pyplot_term as _plt
 
 else:

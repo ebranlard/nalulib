@@ -75,8 +75,8 @@ if not headless:
         on_tty=False,
         conservative=False,
         styles=__STYLES)
-else:
-    print('[INFO] Not hoooking backtrace in headless plot mode')
+#else:
+#    print('[INFO] Not hoooking backtrace in headless plot mode')
 
 # --------------------------------------------------------------------------------}
 # --- tic toc 

@@ -20,7 +20,7 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
     #print('x', x)
     #print('y', y)       
     #print('d', d)
-    #x, y, d = standardize_airfoil_coords(x, y, d=d, reltol=_DEFAULT_REL_TOL, verbose=verbose)
+    #x, y, d = normalize_airfoil_coords(x, y, d=d, reltol=_DEFAULT_REL_TOL, verbose=verbose)
 
     arf = StandardizedAirfoilShape(x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=verbose)
     if verbose:
