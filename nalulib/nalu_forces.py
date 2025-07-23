@@ -1,8 +1,5 @@
-#import termplotlib as plt
-#import terminalplot as plt
-#from uniplot import plot
 import os
-import sys
+import pandas as pd
 import numpy as np
 import glob
 import re
@@ -15,7 +12,8 @@ from nalulib.nalu_input import NALUInputFile
 
 
 def extract_aoa(filename):
-    match = re.search(r'_aoa([-\d\.]+)', filename)
+    filename= filename.lower().replace('=', '').replace('_','')
+    match = re.search(r'aoa([-\d\.]+)', filename)
     if match:
         aoa_str = match.group(1).rstrip('.')
         try:
@@ -23,35 +21,6 @@ def extract_aoa(filename):
         except ValueError:
             return None
     return None
-
-# # Collect results
-
-# for folder in folders:
-    # for fname in os.listdir(folder):
-        # if fname.endswith('.csv'):
-            # print('fname:', fname)
-            # # Extract AoA from filename
-            # aoa = extract_aoa(fname)
-            # if aoa is None:
-                # continue
-            # #df = pd.read_csv(os.path.join(folder, fname))
-            # df = CSVFile(os.path.join(folder, fname)).toDataFrame()
-            # #print(df)
-            # Fx_tot = df['Fpx'].tail(N).mean() + df['Fvx'].tail(N).mean()
-            # Fy_tot = df['Fpy'].tail(N).mean() + df['Fvy'].tail(N).mean()
-            # # Non-dimensional coefficients
-            # S = z * chord    # Chord assumed 1, adjust if needed
-            # q_inf = 0.5 * rho * U0**2 * S
-            # Cx = Fx_tot / q_inf
-            # Cy = Fy_tot / q_inf
-            # print(aoa, Cx, Cy)
-
-# axes[0].set_xlim([-7,20])
-# axes[0].set_ylim([-0.5,2.0])
-# axes[1].set_xlim([0,0.025])
-# axes[1].set_ylim([-0.5,2.0])
-# plt.show()
-
 
 def reference_force(chord=1, rho=1.2, nu=9e-6, U0=None, dz=1, yaml_file='input.yaml', auto=True, dimensionless=True, verbose=False):
     # --- Infer velocity and density from input file
@@ -101,6 +70,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 chord=1, rho=None, nu=None, U0=None, dz=1, 
                 yaml_file='input.yaml', 
                 polar_ref=None,
+                polar_out='polar.csv',
                 auto=True,
                 dimensionless=True,
                 var='xy',
@@ -108,20 +78,23 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 ):
 
     # --- Are we dealing with multiple files or one file?
-    if isinstance(input_files, list):
-        pass
-    else:
-        if "*" in input_files:
-            pattern = input_files
-            # Replace using glob
-            input_files = glob.glob(input_files)
-            if len(input_files) == 0:
-                raise FileNotFoundError(f"No files matching pattern: {pattern}")
-            if len(input_files) > 1:
-                print(f"Multiple files found: {input_files}")
-        else:
+    if isinstance(input_files, str):
             input_files = [input_files]
-    
+    patterns = input_files 
+    input_files = []
+    for pattern in patterns:
+        if "*" in pattern:
+            input_files_loc = glob.glob(pattern)
+            if len(input_files_loc) == 0:
+                raise FileNotFoundError(f"No files matching pattern: {pattern}")
+            input_files.extend(input_files_loc)
+        else:
+            input_files.extend([pattern])
+    # unique and sorted
+    input_files = list(set(input_files))
+    input_files = sorted(input_files)
+    print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
+
     # --- Get reference force
     Fin, U0, rho, nu = reference_force(chord=chord, rho=rho, nu=nu, U0=U0, dz=dz, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
     FC, label= 'F', 'Forces [N]'
@@ -145,7 +118,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 print('Final values: {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(FC, df['Cx'].values[-1], FC, df['Cy'].values[-1]))
 
             # --- Plot time series
-            fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
+            fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,5.8))
             fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
             if 'x' in var:
                 plt.plot(df['Time'].values, df['Cx'].values, label=FC+'x')
@@ -170,27 +143,32 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
             print(f"[FAIL] Error reading {input_file}: {e}")
             continue
         aoa = extract_aoa(input_file)
-        results.append({'aoa': aoa, 'Cl': df['Cy'].values[-1], 'Cd': df['Cx'].values[-1]})
+        results.append({'alpha': aoa, 'Cl': df['Cy'].values[-1], 'Cd': df['Cx'].values[-1]})
 
+    df = pd.DataFrame(results)
     # Sort by AoA
-    results = sorted(results, key=lambda x: x['aoa'])
-    aoas = [r['aoa'] for r in results]
-    Cls = [r['Cl'] for r in results]
-    Cds = [r['Cd'] for r in results]
+    df = df.sort_values(by='alpha')
+    # Create a DataFrame for results
+    df.to_csv(polar_out, index=False)
 
     # --- Plot polar
-    fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,4.8))
+    fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
     if polar_ref is not None and dimensionless:
-        df = CSVFile(polar_ref).toDataFrame()
-        if len(df.columns) >= 3:
-            df.columns.values[:3] = ['alpha', 'Cl', 'Cd']  # Ensure we only use the first three columns
-        axes[0].plot(df['alpha'], df['Cl'], 'ko', label='Cl-exp')
-        axes[0].plot(df['alpha'], df['Cd'], 'ko', label='Cd-exp')
-        axes[1].plot(df['Cd']   , df['Cl'], 'ko', label='exp')
-    sty = 'ro' if len(aoas) == 1 else '-'
-    axes[0].plot(aoas, Cls, sty, label='Cl')
-    axes[0].plot(aoas, Cds, sty, label='Cd')
-    axes[1].plot(Cds, Cls , sty, label='Cl')
+        df_exp = CSVFile(polar_ref).toDataFrame()
+        def sanitize(c):
+            c = c.lower().replace('c_', 'c').replace('_', ' ').split()[0]
+            if c=='aoa':
+                c='alpha'
+            return c
+        new_cols = [sanitize(c) for c in df_exp.columns.values]
+        df_exp.columns = new_cols
+        axes[0].plot(df_exp['alpha'], df_exp['cl'], 'ko', label='Cl-exp')
+        axes[0].plot(df_exp['alpha'], df_exp['cd'], 'ko', label='Cd-exp')
+        axes[1].plot(df_exp['cd']   , df_exp['cl'], 'ko', label='exp')
+    sty = 'ro' if len(df) == 1 else '-'
+    axes[0].plot(df['alpha'], df['Cl'], sty, label='Cl')
+    axes[0].plot(df['alpha'], df['Cd'], sty, label='Cd')
+    axes[1].plot(df['Cd']   , df['Cl'], sty, label='Cl')
     axes[0].set_xlabel('Angle of Attack (deg)')
     axes[0].set_ylabel('Coefficient')
     axes[1].set_ylabel('Coefficient')
@@ -202,7 +180,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
 
 def nalu_forces_CLI():
     parser = argparse.ArgumentParser(description="Plot Nalu forces from a CSV file, optionally dimensionless.")
-    parser.add_argument('input', type=str, nargs='?', default='forces.csv', help='Input forces CSV file')
+    parser.add_argument('input', type=str, nargs='+', default='forces.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
     parser.add_argument('--tmin', type=float, default=None, help='Minimum time')
     parser.add_argument('--tmax', type=float, default=None, help='Maximum time')
     parser.add_argument('--chord', type=float, default=1.0, help='Airfoil chord')
@@ -212,6 +190,7 @@ def nalu_forces_CLI():
     parser.add_argument('--dz', type=float, default=1.0, help='Spanwise thickness')
     parser.add_argument('--yaml', type=str, default='input.yaml', help='NALU input YAML file for auto properties')
     parser.add_argument('--polar-ref', type=str, default=None, help='CSV file with reference polar data, alpha, Cl, Cd, Cm')
+    parser.add_argument('--polar-out', type=str, default=None, help='CSV file with output polar if multiple files provied.')
     parser.add_argument('--no-auto', dest='auto', action='store_false', help='Do not auto-read velocity, density, etc from YAML')
     parser.add_argument('--dimensionless', action='store_false', help='Plot dimensional forces')
     parser.add_argument('--var', type=str, default='xy', help='Which force components to plot (x, y, or xy)')
