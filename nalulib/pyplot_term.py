@@ -70,6 +70,9 @@ class DummyAx():
         pass
         #print('[pyplott] arrow skipped')
 
+    def grid(self, *args, **kwargs):
+        _plt.grid(*args, **kwargs)
+
 
 class DummyFig():
     def __init__(self, axes=None, *args, figsize=None, **kwargs):
