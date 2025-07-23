@@ -30,7 +30,8 @@ TODO: closed should be an "output property"
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import argparse
+import nalulib.pyplot as plt
 # NOTE: consider using shapely for more operations
 # try:
 #     import shapely
@@ -39,7 +40,7 @@ import matplotlib.pyplot as plt
 
 # Local 
 from nalulib.airfoillib import *
-from nalulib.airfoil_shapes_io import write_airfoil
+from nalulib.airfoil_shapes_io import write_airfoil, read_airfoil
 from nalulib.airfoillib import _DEFAULT_REL_TOL
 
 # Used by lecay AirfoilShape class
@@ -288,7 +289,7 @@ class StandardizedAirfoilShape():
         return ax
 
     def plot(self, **kwargs):
-        return plot_normalized(self._x, self._y, **kwargs)
+        return plot_standardized(self._x, self._y, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -639,9 +640,6 @@ def debug_slope():
     alpha=np.mean(-aU[:-1]+aD[:-1])
     print(alpha)
 
-
-    import matplotlib.pyplot as plt
-
     fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
     fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
     ax.plot(Up[:,0], Up[:,1]    , label='')
@@ -675,4 +673,23 @@ if __name__ == '__main__':
     arf.plot_surfaces()
 
     plt.show()
+
+
+def airfoil_info_CLI():
+    parser = argparse.ArgumentParser(description="Show info about an airfoil file using StandardizedAirfoilShape.")
+    parser.add_argument('input', type=str, help='Input airfoil file path')
+    parser.add_argument('--plot', action='store_true', help='Plot the airfoil shape')
+    parser.add_argument('--name', type=str, default='', help='Optional name for the airfoil')
+    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    args = parser.parse_args()
+
+    x, y, _ = read_airfoil(args.input)
+
+    arf = StandardizedAirfoilShape(x, y, name=args.name or args.input, verbose=args.verbose)
+
+    print(arf)
+    if args.plot:
+        arf.plot()
+        import matplotlib.pyplot as plt
+        plt.show()
 

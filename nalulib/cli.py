@@ -15,3 +15,4 @@ from nalulib.airfoil_shapes_io import airfoil_plot_CLI
 from nalulib.airfoil_shapes_io import convert_airfoil_CLI
 from nalulib.airfoil_mesher import mesh_airfoil_CLI
 from nalulib.pyhypwrap import pyhyp_cmdline_CLI
+from nalulib.airfoil_shapes import airfoil_info_CLI

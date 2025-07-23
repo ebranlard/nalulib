@@ -29,7 +29,7 @@ class DummyAx():
     def plot(self, x, y, *args, color=None, ms=None, markerfacecolor=None, markersize=None, **kwargs):
         if len(args)==1:
             sty = args[0]
-            print('>>> sty', sty)
+            #print('>>> sty', sty)
         if not hasattr(x, '__len__'):
             x = [x]
         if not hasattr(y, '__len__'):
@@ -55,7 +55,7 @@ class DummyAx():
         _plt.ylabel(*args, **kwargs)
 
     def set_aspect(self, *args, **kwargs):
-        print('[pyplott] aspect skipped')
+        #print('[pyplott] aspect skipped')
         pass
         #_plt.ylabel(*args, **kwargs)
 
@@ -67,7 +67,8 @@ class DummyAx():
         # _plt.legend(*args, **kwargs)
 
     def arrow(self, *args, **kwargs):
-        print('[pyplott] arrow skipped')
+        pass
+        #print('[pyplott] arrow skipped')
 
 
 class DummyFig():
