@@ -1,11 +1,11 @@
 import os
-import matplotlib.pyplot as plt
 import numpy as np
 import inspect
 from scipy.interpolate import interp1d
 from scipy.interpolate import splprep, splev
 
 # Local
+import nalulib.pyplot as plt # can be safely replaced by matplotlib
 from nalulib.curves import contour_is_closed
 from nalulib.curves import contour_is_clockwise
 from nalulib.curves import contour_is_counterclockwise
@@ -771,14 +771,12 @@ def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None
     xTE, yTE = x[ITE]   , y[ITE]
     xLE, yLE = x[iLE]   , y[iLE]
 
-    """ Plot coordinates of an airfoil contour in normalized coordinates."""
     if ax is None:
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(12.8,4.0)) # (6.4,4.8)
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
 
     # Main plot
     ax.plot(x, y, sty, label=label, ms=5)
-
 
     if not simple:
         ax.plot(xu , yu,   '-', label=f'Upper surface (n={len(xu)-2})', markerfacecolor='none', markersize=8)

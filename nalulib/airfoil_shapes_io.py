@@ -1,6 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
+import argparse
+
+import nalulib.pyplot as plt # wrap matplotlib
 from nalulib.essentials import *
 from nalulib.weio.csv_file import CSVFile
 from nalulib.weio.plot3d_file import Plot3DFile, read_plot3d, write_plot3d
@@ -71,6 +74,8 @@ def write_airfoil(x, y, filename, format=None, **kwargs):
 
 def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False, thick=False, standardize=False, overwrite_allowed=False, plot=False):
     """"""
+    from nalulib.airfoillib import normalize_airfoil_coords
+    from nalulib.airfoillib import plot_airfoil
     # Determine output file and format
     if output_file is None and out_format is None:
         if standardize:
@@ -103,18 +108,14 @@ def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False
         print(f"Format     : {out_format}")
 
     # Read and write
-    from nalulib.airfoil_shapes_io import read_airfoil, write_airfoil
     x, y, d = read_airfoil(input_file)
 
     if standardize:
         if verbose:
             print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
-        from nalulib.airfoillib import normalize_airfoil_coords
         x, y = normalize_airfoil_coords(x, y, verbose=verbose)
 
     if plot:
-        import matplotlib.pyplot as plt
-        from nalulib.airfoillib import plot_airfoil
         plot_airfoil(x, y)
         plt.show()
     
@@ -226,7 +227,6 @@ def read_airfoil_pointwise(filename, plot=False, verbose=False):
     assert np.allclose(coords[0, :], coords[-1, :], rtol=1e-10, atol=1e-12), "First and last points must be the same in Pointwise format."
 
     if plot:
-        import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 5))
         plt.plot(coords[:,0], coords[:,1], '.-', label='Airfoil Shape', color='black')
         plt.plot(lower[:,0], lower[:,1], label='Lower Surface', color='blue')
@@ -308,8 +308,6 @@ def write_airfoil_plot3d(x, y, filename, thick=False):
     write_plot3d(filename, coords, dims)
 
 def airfoil_plot(input_file, standardize=False, verbose=False):
-    from nalulib.airfoil_shapes_io import read_airfoil
-    import matplotlib.pyplot as plt
     from nalulib.airfoillib import normalize_airfoil_coords
     from nalulib.airfoillib import plot_airfoil
     print('Reading: ', input_file)
@@ -321,7 +319,6 @@ def airfoil_plot(input_file, standardize=False, verbose=False):
     plt.show()
 
 def airfoil_plot_CLI():
-    import argparse
     parser = argparse.ArgumentParser(description="Plot airfoil files for any supported formats (csv, plot3d, pointwise, geo, etc).")
     parser.add_argument(      'input', type=str, help='Input airfoil file path')
     parser.add_argument(      '--std' , action='store_true', help='Standardize the format so the coordinates are: looped, anticlockwise, and starting from the upper TE.')
@@ -330,8 +327,6 @@ def airfoil_plot_CLI():
     
 
 def convert_airfoil_CLI():
-    import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="Convert airfoil files between formats (csv, plot3d, pointwise, geo, etc).")
     parser.add_argument('-i', '--input', required=True, help='Input airfoil file path')
@@ -348,12 +343,17 @@ def convert_airfoil_CLI():
 
 
 if __name__ == "__main__":
-    filename = r"C:\Work\UAA\UAlib\ua-tuning\experiments\OSU\S809.csv"
-    x, y, d = read_airfoil(filename)
+    filename = r"C:/Work/Student_projects/CFD_airfoil/nalu-cases/airfoils/du00-w-212_re3M.csv"
+    airfoil_plot(filename)
+    #import plotext as _plt
+    #_plt.plot([0,1], [0,1], color='red')
+    #_plt.show()
 
-    fullbase, ext = os.path.splitext(filename)
-    base = os.path.basename(fullbase)
-
-    filename_out = os.path.join(os.path.dirname(filename), '_'+base + '.fmt')
-
-    write_airfoil_plot3d(x, y, filename_out, thick=True)
+#     x, y, d = read_airfoil(filename)
+# 
+#     fullbase, ext = os.path.splitext(filename)
+#     base = os.path.basename(fullbase)
+# 
+#     filename_out = os.path.join(os.path.dirname(filename), '_'+base + '.fmt')
+# 
+#     write_airfoil_plot3d(x, y, filename_out, thick=True)

@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 from nalulib.exodusii.file import ExodusIIFile

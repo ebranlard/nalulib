@@ -8,3 +8,4 @@ netcdf4
 backtrace
 ruamel.yaml
 pyyaml
+plotext

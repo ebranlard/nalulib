@@ -51,7 +51,7 @@ def myprint(s1, s2, s3=None):
 import traceback 
 import backtrace
 from backtrace import Fore, Style
-STYLES = {
+__STYLES = {
     'backtrace': Fore.YELLOW + '{0}',
     'error': Fore.RED + Style.BRIGHT + '{0}',
     'line': Fore.RED + Style.BRIGHT + '{0:4s}',
@@ -60,16 +60,23 @@ STYLES = {
     'call': Fore.YELLOW + '> ' + Style.BRIGHT + '{0}',
 }
 
+try:
+    import nalulib.pyplot as plt
+    headless = plt.is_headless
+except:
+    headless = False
 
-backtrace.hook(
-    reverse=False,
-    align=False,
-    strip_path=True,
-    enable_on_envvar_only=False,
-    on_tty=False,
-    conservative=False,
-    styles=STYLES)
-
+if not headless:
+    backtrace.hook(
+        reverse=False,
+        align=False,
+        strip_path=True,
+        enable_on_envvar_only=False,
+        on_tty=False,
+        conservative=False,
+        styles=__STYLES)
+else:
+    print('[INFO] Not hoooking backtrace in headless plot mode')
 
 # --------------------------------------------------------------------------------}
 # --- tic toc 
