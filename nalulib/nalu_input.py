@@ -10,6 +10,7 @@ import ruamel.yaml
 from ruamel.yaml.comments import CommentedMap
 
 # Local
+from nalulib.essentials import *
 from nalulib.exodus_info import exodus_get_names
 # -----------------------------------------------------------------------------------
 # --- Helper functions for sorting YAML keys
@@ -135,6 +136,82 @@ class NALUInputFile(YamlEditor):
     def __init__(self, filename, reader='ruamel'):
         """ Initialize NALUInputFile with a YAML file path """
         super().__init__(filename=filename, reader=reader)
+
+    def __repr__(self):
+            s = f"<{type(self).__name__} object>\n"
+            s += f" - filename: {self.filename}\n"
+            try:
+                realms = self.data.get('realms', [])
+                s += f" - Number of realms: {len(realms)}\n"
+                for i, realm in enumerate(realms):
+                    s += f"   * Realm {i}: name={realm.get('name', 'N/A')}\n"
+                    mesh = realm.get('mesh', realm.get('meshes', 'N/A'))
+                    s += f"     - mesh: {mesh}\n"
+                    if 'material_properties' in realm:
+                        mats = realm['material_properties'].get('target_name', 'N/A')
+                        s += f"     - material: {mats}\n"
+                    if 'boundary_conditions' in realm:
+                        s += f"     - boundary_conditions: {len(realm['boundary_conditions'])}\n"
+                    if 'initial_conditions' in realm:
+                        s += f"     - initial_conditions: {len(realm['initial_conditions'])}\n"
+                    if 'mesh_motion' in realm:
+                        s += f"     - mesh_motion: present, size:{len(realm['mesh_motion'])}\n"
+            except Exception as e:
+                s += f" [Error reading realms: {e}]\n"
+            # Computed properties
+            s += f" * realm_names: {self.realm_names}\n"
+            try:
+                s += f" * velocity  : {self.velocity}\n"
+            except Exception:
+                s += f" * velocity  : [not found]\n"
+            try:
+                s += f" * density   : {self.density}\n"
+            except Exception:
+                s += f" * density   : [not found]\n"
+            try:
+                s += f" * viscosity : {self.viscosity}  (nu)\n"
+            except Exception:
+                s += f" * viscosity : [not found]\n"
+            s += "methods:\n"
+            s += " - sort, extract_mesh_motion, check, print\n"
+            return s
+    @property
+    def realm_names(self):
+        """Returns the name of the first realm, or None if not found."""
+        return [r.get('name') for r in self.data['realms']]
+
+    @property
+    def velocity(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                #if 'inflow_boundary_condition' in bc:
+                if 'inflow_user_data' in bc:
+                    return bc['inflow_user_data']['velocity']
+            for ic in realm['initial_conditions']:
+                if 'value' in ic:
+                    if 'velocity' in ic['value']:
+                        return ic['value']['velocity']
+        raise Exception('Unable to extract velocity from yaml file')
+
+    @property
+    def density(self):
+        for realm in self.data['realms']:
+            #if 'material_properties' in realm:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'density':
+                    return specs['value']
+        raise Exception('Unable to extract density from yaml file')
+
+    @property
+    def viscosity(self):
+        """ kinametic viscosity , nu = mu/rho """
+        for realm in self.data['realms']:
+            #if 'material_properties' in realm:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'viscosity':
+                    return specs['value']
+        raise Exception('Unable to extract density from yaml file')
+
 
     def extract_mesh_motion(self, plot=False, csv_file=None, export=False):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
@@ -352,6 +429,10 @@ def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False
     if verbose:
         print('NALUInputFile: Reading', input_file)
     yml = NALUInputFile(input_file, reader=reader)
+
+    # --- Print class to file
+    print(yml)
+
     if check:
         yml.check(verbose=verbose)
     if sort:

@@ -8,7 +8,6 @@ class TestNALUInputFile(unittest.TestCase):
         # Path to example input file
         example_file = os.path.join(os.path.dirname(__file__), '../examples/input.yaml')
         yml = NALUInputFile(example_file)
-        return
 
         expected_velocity = [75.0, 0.0, 0.0]
         expected_density = 1.2
