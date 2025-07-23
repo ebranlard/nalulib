@@ -98,7 +98,7 @@ def airfoil_get_xy_by_file(filename, format=None):
 # --------------------------------------------------------------------------------}
 # --- Airfoil Geometry
 # --------------------------------------------------------------------------------{
-def normalize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
+def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     x = np.asarray(x)
     y = np.asarray(y)
 
@@ -127,9 +127,9 @@ def normalize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
 
     return x, y
 
-def airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True):
+def airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True):
     """
-    Checks if airfoil coordinates x, y are properly normalized according to normalized_airfoil_coords convention:
+    Checks if airfoil coordinates x, y are properly standardized according to standardized_airfoil_coords convention:
       - Contour is closed
       - Contour is counterclockwise
       - First point is the upper TE point (max x, max y)
@@ -144,14 +144,14 @@ def airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseErr
         if raiseError:
             raise Exception("Airfoil contour should be closed, but it is not. Use close_contour() to close it.")
         if verbose:
-            print("[is_normalized_airfoil_coords] Contour is not closed.")
+            print("[airfoillib] Contour is not closed.")
 
     checks.append(contour_is_counterclockwise(x, y))
     if not checks[-1]:
         if raiseError:
             raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
         if verbose:
-            print("[is_normalized_airfoil_coords] Contour is not counterclockwise.")
+            print("[airfoillib] Contour is not counterclockwise.")
 
     # First point is upper TE (max x, max y among max x)
     IXmax = np.where(x == np.max(x))[0]
@@ -162,7 +162,7 @@ def airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseErr
         if raiseError:
             raise Exception(f"First point is not upper TE (index {iUpperTE}).")
         if verbose:
-            print(f"[is_normalized_airfoil_coords] First point is not upper TE (index {iUpperTE}).")
+            print(f"[airfoillib] First point is not upper TE (index {iUpperTE}).")
 
     return all(checks)
 
@@ -760,9 +760,9 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
 # ---------------------------------------------------------------------------
 # --- Plot  Airfoil library
 # ---------------------------------------------------------------------------
-def plot_normalized(x, y, first=True, orient=True, label=None, title='', ax=None, simple=False, sty='k.-'):
-    """ Plot airfoil coordinates if normalized using airfoil_normalize_coords()."""
-    airfoil_is_normalized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
+def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=None, simple=False, sty='k.-'):
+    """ Plot airfoil coordinates if standardized using airfoil_standardize_coords()."""
+    airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
 
     IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False)
     TE_type = airfoil_TE_type(x, y, ITE=ITE)
@@ -808,10 +808,10 @@ def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True):
     Highlights only the first point, last point, and orientation (arrow from first to second point).
     Does not attempt to detect TE/LE or surface types.
     """
-    normalized = airfoil_is_normalized(x, y, raiseError=False)
-    if normalized:
-        return plot_normalized(x, y, label=label, title=title, sty=sty, ax=ax)
-    
+    standardized = airfoil_is_standardized(x, y, raiseError=False)
+    if standardized:
+        return plot_standardized(x, y, label=label, title=title, sty=sty, ax=ax)
+
     orientation = contour_orientation(x, y)
 
     import matplotlib.pyplot as plt

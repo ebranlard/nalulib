@@ -74,7 +74,7 @@ def write_airfoil(x, y, filename, format=None, **kwargs):
 
 def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False, thick=False, standardize=False, overwrite_allowed=False, plot=False):
     """"""
-    from nalulib.airfoillib import normalize_airfoil_coords
+    from nalulib.airfoillib import standardize_airfoil_coords
     from nalulib.airfoillib import plot_airfoil
     # Determine output file and format
     if output_file is None and out_format is None:
@@ -113,7 +113,7 @@ def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False
     if standardize:
         if verbose:
             print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
-        x, y = normalize_airfoil_coords(x, y, verbose=verbose)
+        x, y = standardize_airfoil_coords(x, y, verbose=verbose)
 
     if plot:
         plot_airfoil(x, y)
@@ -308,13 +308,13 @@ def write_airfoil_plot3d(x, y, filename, thick=False):
     write_plot3d(filename, coords, dims)
 
 def airfoil_plot(input_file, standardize=False, verbose=False):
-    from nalulib.airfoillib import normalize_airfoil_coords
+    from nalulib.airfoillib import standardize_airfoil_coords
     from nalulib.airfoillib import plot_airfoil
     print('Reading: ', input_file)
     x, y, d = read_airfoil(input_file)
     if standardize:
         print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
-        x, y = normalize_airfoil_coords(x, y, verbose=verbose)
+        x, y = standardize_airfoil_coords(x, y, verbose=verbose)
     plot_airfoil(x, y)
     plt.show()
 

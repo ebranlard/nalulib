@@ -25,13 +25,13 @@ class TestAirfoilLib(unittest.TestCase):
     def test_resample_refine(self):
         def test(*args, factor_surf=3, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
-            x, y = normalize_airfoil_coords(x, y)
+            x, y = standardize_airfoil_coords(x, y)
             IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y)
             # Refine grid
             x_new, y_new = resample_airfoil_refine(x, y, IUpper, ILower, ITE, factor_surf=factor_surf, factor_te=2)
             # All original points should be present in the refined grid (within tolerance)
-            #ax = plot_normalized(x, y, label='Original', sty='ro', simple=True)
-            #ax = plot_normalized(x_new, y_new, label='Refined', sty='k.', simple=True, ax=ax)
+            #ax = plot_standardized(x, y, label='Original', sty='ro', simple=True)
+            #ax = plot_standardized(x_new, y_new, label='Refined', sty='k.', simple=True, ax=ax)
             curve_check_superset(x, y, x_new, y_new, raiseError=True, verbose=True) #, reltol=0.01)
             #plt.show()
 
@@ -43,8 +43,8 @@ class TestAirfoilLib(unittest.TestCase):
         def test(*args,  **kwargs):
             # Generate a NACA airfoil
             x, y = airfoil_get_xy(*args, **kwargs)
-            x_new, y_new = normalize_airfoil_coords(x, y)
-            airfoil_is_normalized(x_new, y_new, raiseError=True)
+            x_new, y_new = standardize_airfoil_coords(x, y)
+            airfoil_is_standardized(x_new, y_new, raiseError=True)
         
         test('diamond')
         test('naca0012')
@@ -53,7 +53,7 @@ class TestAirfoilLib(unittest.TestCase):
     def test_trailing_edge_angle(self):
         def test(*args, expected=0, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
-            x_new, y_new = normalize_airfoil_coords(x, y)
+            x_new, y_new = standardize_airfoil_coords(x, y)
             angle_deg, result = airfoil_trailing_edge_angle(x_new, y_new, plot=False)
             #self.assertIsInstance(angle_deg, float)
             #self.assertGreaterEqual(angle_deg, 0.0)
@@ -70,7 +70,7 @@ class TestAirfoilLib(unittest.TestCase):
         # NOTE: LEADING EDGE RADIUS IS NOT FINISHED
         def test(*args, expected=0, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
-            x_new, y_new = normalize_airfoil_coords(x, y)
+            x_new, y_new = standardize_airfoil_coords(x, y)
             r, result = airfoil_leading_edge_radius(x_new, y_new, plot=False)
             #self.assertAlmostEqual(r, expected)
             return r
@@ -86,7 +86,7 @@ class TestAirfoilLib(unittest.TestCase):
     def test_ITE(self):
         def test(*args, method='xmax', expected=None, **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
-            x_new, y_new = normalize_airfoil_coords(x, y)
+            x_new, y_new = standardize_airfoil_coords(x, y)
             _,_,ITE,_ = airfoil_split_surfaces(x_new, y_new, method=method)
             np.testing.assert_array_equal(ITE, expected)
 
@@ -102,7 +102,7 @@ class TestAirfoilLib(unittest.TestCase):
     def test_te_type(self):
         def test(*args, method='xmax', expected='sharp', **kwargs):
             x, y = airfoil_get_xy(*args, **kwargs)
-            x_new, y_new = normalize_airfoil_coords(x, y)
+            x_new, y_new = standardize_airfoil_coords(x, y)
             TEtype = airfoil_TE_type(x_new, y_new, method=method)
             self.assertEqual(TEtype, expected)
             return TEtype
