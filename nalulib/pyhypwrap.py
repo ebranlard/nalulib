@@ -227,8 +227,9 @@ def pyhyp_cmdline_CLI():
             options[key] = val
 
     # Prepare data dictionary
+    verbose = args.verbose
 
-    if args.verbose:
+    if verbose:
         print('Arguments received:')
         print(f"       Input file      : {args.input}")  
         print(f"       Output file     : {args.output}")
@@ -286,9 +287,10 @@ def pyhyp_cmdline_CLI():
 
     # --- Check if plot3d file was generated
     if not os.path.exists(output_file_fmt):
-        raise Exception('>>> Output file not generated', output_file_fmt)
+        raise Exception('>>> Plot3d file not generated', output_file_fmt)
     else:
-        print('>>> Output file generated:', output_file_fmt)
+        if verbose:
+            print('[INFO] Fmt file generated:', output_file_fmt)
     
     # --- Generate exodus file
     check_zpos = not args.no_zpos_check
@@ -297,20 +299,23 @@ def pyhyp_cmdline_CLI():
         inlet_name=args.inlet_name,
         outlet_name=args.outlet_name,
         block_base=args.block_base,
+        final_print=False
         )
 
     if not os.path.exists(output_file_exo):
         raise Exception('>>> Output file not generated:', output_file_exo)
-    print('>>> Output file generated:', output_file_exo)
+    print('[INFO] Exo file generated:', output_file_exo)
 
     # --- Cleanup
     if not args.no_cleanup:
         if os.path.exists(output_file_fmt):
             os.remove(output_file_fmt)
-            print('>>> Removed temporary file:', output_file_fmt)    
+            if verbose:
+                print('>>> Removed temporary file:', output_file_fmt)    
         if input_file_tmp is not None and os.path.exists(input_file_tmp):
             os.remove(input_file_tmp)
-            print('>>> Removed temporary input file:', input_file_tmp)
+            if verbose:
+                print('>>> Removed temporary input file:', input_file_tmp)
     print(f"[INFO] s0 used: {options.get('s0')}")
 
 

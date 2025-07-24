@@ -4,7 +4,6 @@ import numpy as np
 import glob
 # Local
 from nalulib.essentials import *
-from nalulib.exodusii.file import ExodusIIFile
 from nalulib.nalu_input import NALUInputFile
 from nalulib.nalu_batch import nalu_batch
 from nalulib.exodus import exo_get_times
@@ -18,7 +17,7 @@ def myprint(s1, s2, s3=None):
 def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, debug=False, nt_max_tol=10, nrun=None, batch_file=None, cluster='unity'):
     myprint('Input YAML file', yaml_file)
 
-    yml = NALUInputFile(yaml_file)
+    yml = NALUInputFile(yaml_file, reader='ruamel') # NOTE: using ruamel to keep comments
     #    start_time: 0
     #    termination_step_count: 3760
     #    time_step: 0.000266667

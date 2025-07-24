@@ -62,7 +62,7 @@ class StandardizedAirfoilShape():
     The class stores the origianl starting point, orientation, and closed status of the airfoil.
     The class can output in a different convention as the internal representation (TODO)
     """
-    def __init__(self, x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=False):
+    def __init__(self, x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=False, TE_type=None):
         # Store original info
 
         self._ori_standardized = airfoil_is_standardized(x, y, raiseError=False)
@@ -83,20 +83,23 @@ class StandardizedAirfoilShape():
         self.output_closed = True
         self.output_counterclockwise = True
 
-        self._TE_type = airfoil_TE_type(self._x, self._y)
+        if TE_type is None:
+            self._TE_TYPE = airfoil_TE_type(self._x, self._y)
+        else:
+            self._TE_TYPE = TE_type # Try to keep it enforced if not None
         self._split_surfaces()
 
     def copy(self):
         return StandardizedAirfoilShape(x=self._x.copy(), y=self._y.copy(), name=self.name+'_copy', reltol=self.reltol)
 
-    def return_new_or_copy(self, x_new, y_new, inplace=False, label='_new'):
+    def return_new_or_copy(self, x_new, y_new, inplace=False, label='_new', TE_type=None):
         """ Return the normalized airfoil shape."""
         x_new, y_new = standardize_airfoil_coords(x_new, y_new, reltol=self.reltol, verbose=self.verbose)
         if inplace:
             self._x, self._y = x_new, y_new
             return self
         else:
-            return StandardizedAirfoilShape(x_new, y_new, name=self.name+label, reltol=self.reltol, verbose=self.verbose)
+            return StandardizedAirfoilShape(x_new, y_new, name=self.name+label, reltol=self.reltol, verbose=self.verbose, TE_type=TE_type)
     
     # --------------------------------------------------------------------------------
     # --- Properties 
@@ -146,7 +149,7 @@ class StandardizedAirfoilShape():
     # --- Geometry
     # --------------------------------------------------------------------------------
     def _split_surfaces(self):
-        self._IUpper, self._ILower, self._ITE, self._iLE = airfoil_split_surfaces(self._x, self._y, reltol=self.reltol, verbose=self.verbose)
+        self._IUpper, self._ILower, self._ITE, self._iLE = airfoil_split_surfaces(self._x, self._y, reltol=self.reltol, verbose=self.verbose, TE_type=self._TE_TYPE)
         self._xu,  self._yu  = self._x[self._IUpper], self._y[self._IUpper]      
         self._xl,  self._yl  = self._x[self._ILower], self._y[self._ILower]
         self._xTE, self._yTE = self._x[self._ITE]   , self._y[self._ITE]
@@ -163,8 +166,25 @@ class StandardizedAirfoilShape():
 
     def resample_spline(self, n_surf=1000, inplace=False, kind='cubic'):
         self._split_surfaces()
-        x_new, y_new = resample_airfoil_spline(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf, kind=kind)
-        return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_spline')
+        if self._TE_TYPE=='sharp':
+            IUpper = self._IUpper[1:] # Do not include the upper TE point to preserve TE angle
+            ILower = self._ILower[:-1] # Do not include the upper TE point to preserve TE angle
+            ITE = np.concatenate( ( [self._ILower[-2]], self._ITE, [self._IUpper[1]] ))
+            # NOTE: we could potentially do a inter_te linear here to match the resolution
+        else:
+            IUpper = self._IUpper
+            ILower = self._ILower
+            ITE    = self._ITE
+        x_new, y_new = resample_airfoil_spline(self._x, self._y, IUpper, ILower, ITE, n_surf=n_surf, kind=kind)
+        # fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
+        # fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+        # ax.plot(self._x, self._y, 'rd'  , label='old')
+        # ax.plot(x_new, y_new,'ko'  , label='new')
+        # ax.set_xlabel('')
+        # ax.set_ylabel('')
+        # ax.legend()
+        # plt.show()
+        return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_spline', TE_type=self._TE_TYPE) # Preserve TE type
 
     def resample_cosine(self, n_surf=80, inplace=False):
         self._split_surfaces()
@@ -187,7 +207,7 @@ class StandardizedAirfoilShape():
         if method == 'auto':
             method = 'hyperbolic'
             n = n if n is not None else GUIDELINES_N_DS_REC
-            if self._TE_type == 'blunt':
+            if self._TE_TYPE == 'blunt':
                 n_te = GUIDELINES_N_TE_BLUNT_REC
         if verbose:
             print('Resampling airfoil with method: {}, n: {}, n_te: {}'.format(method, n, n_te))
@@ -227,7 +247,7 @@ class StandardizedAirfoilShape():
         s='<{} object>:\n'.format(type(self).__name__)
         s+='|Basic properties:\n'
         s+='| - name       : {}\n'.format(self.name)
-        s+='| * TE_type    : {}\n'.format(self._TE_type)
+        s+='| * TE_type    : {}\n'.format(self._TE_TYPE)
         s+='| * chord      : {}\n'.format(self.chord)
         s+='| * thickness_max: {:.6f}\n'.format(self.thickness_max)
         s+='| * t_rel_max  :     {:.6f}\n'.format(self.t_rel_max)
@@ -292,7 +312,7 @@ class StandardizedAirfoilShape():
         return ax
 
     def plot(self, **kwargs):
-        return plot_standardized(self._x, self._y, **kwargs)
+        return plot_standardized(self._x, self._y, TE_type=self._TE_TYPE,**kwargs)
 
 
 # ---------------------------------------------------------------------------

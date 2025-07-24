@@ -34,8 +34,8 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
 
 
     # --- Read YAML file
-    yml_ori = NALUInputFile(input_file)
-    yml = NALUInputFile(input_file)
+    yml_ori = NALUInputFile(input_file, reader='ruamel') # NOTE: using ruamel to keep comments
+    yml = NALUInputFile(input_file, reader='ruamel')
     realms_ori = yml_ori.data['realms']
     realms = yml.data['realms']
     if len(realms) > 1:
@@ -63,17 +63,17 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     if not os.path.exists(mesh_dir):
         os.makedirs(mesh_dir)
     angles = aseq - aoa_ori
-    mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:.1f}.exo'.format(alpha)) for alpha in aseq]
+    mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:04.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
     rotate_exodus(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name)
     print('----------------------------------------------------------------------------')
 
 
     # --- Create YAML files
-    nalu_files = [os.path.join(base_dir, base+'_aoa{:.1f}.yaml'.format(alpha)) for alpha in aseq]
+    nalu_files = [os.path.join(base_dir, base+'_aoa{:04.1f}.yaml'.format(alpha)) for alpha in aseq]
         
     for alpha, nalu_file, mesh_file in zip(aseq, nalu_files, mesh_files):
-        sAOA = '_aoa{:.1f}'.format(alpha)
+        sAOA = '_aoa{:04.1f}'.format(alpha)
         # --- Change mesh
         mesh_rel = os.path.relpath(mesh_file, os.path.dirname(nalu_file))
         realm['mesh'] = mesh_rel.replace('\\','/')
@@ -103,7 +103,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
 
     # --- Create BATCH files
     for alpha, nalu_file  in zip(aseq, nalu_files):
-        jobname_case = jobname + 'A{:.1f}'.format(alpha)
+        jobname_case = jobname + 'A{:04.1f}'.format(alpha)
         new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case)
         myprint('Written Batch File', new_batch, jobname_case)
 

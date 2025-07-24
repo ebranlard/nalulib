@@ -49,9 +49,13 @@ class DummyAx():
 
 
     def set_xlabel(self, *args, **kwargs):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
         _plt.xlabel(*args, **kwargs)
 
     def set_ylabel(self, *args, **kwargs):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
         _plt.ylabel(*args, **kwargs)
 
     def set_aspect(self, *args, **kwargs):
@@ -60,6 +64,8 @@ class DummyAx():
         #_plt.ylabel(*args, **kwargs)
 
     def set_title(self, *args, **kwargs):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
         _plt.title(*args, **kwargs)
 
     def legend(self, *args, **kwargs):

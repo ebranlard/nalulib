@@ -10,6 +10,21 @@ from nalulib.weio.csv_file import CSVFile
 from nalulib.nalu_input import NALUInputFile
 
 
+def standardize_polar_df(df):
+    def sanitize(c):
+        c = c.lower().replace('c_', 'c').replace('_', ' ').strip().split()[0]
+        if c=='aoa':
+            c='Alpha'
+        c = c.capitalize()
+        return c
+    new_cols = [sanitize(c) for c in df.columns.values]
+    df.columns = new_cols
+    return df
+
+def plot_polar_df(axes, df, sty, label=None):
+    axes[0].plot(df['Alpha'], df['Cl'], sty, label='Cl '+ (label if label is not None else ''))
+    axes[0].plot(df['Alpha'], df['Cd'], sty, label='Cd '+ (label if label is not None else ''))
+    axes[1].plot(df['Cd']   , df['Cl'], sty, label=label)
 
 def extract_aoa(filename):
     filename= filename.lower().replace('=', '').replace('_','')
@@ -70,6 +85,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 chord=1, rho=None, nu=None, U0=None, dz=1, 
                 yaml_file='input.yaml', 
                 polar_ref=None,
+                polar_exp=None,
                 polar_out='polar.csv',
                 auto=True,
                 dimensionless=True,
@@ -148,31 +164,36 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
     df = pd.DataFrame(results)
     # Sort by AoA
     df = df.sort_values(by='alpha')
+    df = standardize_polar_df(df)
+
+
     # Create a DataFrame for results
+    print('[INFO] Output polar: ', polar_out)
     df.to_csv(polar_out, index=False)
 
     # --- Plot polar
     fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
+
     if polar_ref is not None and dimensionless:
-        df_exp = CSVFile(polar_ref).toDataFrame()
-        def sanitize(c):
-            c = c.lower().replace('c_', 'c').replace('_', ' ').split()[0]
-            if c=='aoa':
-                c='alpha'
-            return c
-        new_cols = [sanitize(c) for c in df_exp.columns.values]
-        df_exp.columns = new_cols
-        axes[0].plot(df_exp['alpha'], df_exp['cl'], 'ko', label='Cl-exp')
-        axes[0].plot(df_exp['alpha'], df_exp['cd'], 'ko', label='Cd-exp')
-        axes[1].plot(df_exp['cd']   , df_exp['cl'], 'ko', label='exp')
+        print('[INFO] Ref polar   : ', polar_ref)
+        df_ref = CSVFile(polar_ref).toDataFrame()
+        df_ref = standardize_polar_df(df_ref)
+        plot_polar_df(axes, df_ref, sty='k-', label='ref')
+    if polar_exp is not None and dimensionless:
+        print('[INFO] Exp polar   : ', polar_exp)
+        df_exp = CSVFile(polar_exp).toDataFrame()
+        df_exp = standardize_polar_df(df_exp)
+        plot_polar_df(axes, df_exp, sty='ko', label='exp')
+
     sty = 'ro' if len(df) == 1 else '-'
-    axes[0].plot(df['alpha'], df['Cl'], sty, label='Cl')
-    axes[0].plot(df['alpha'], df['Cd'], sty, label='Cd')
-    axes[1].plot(df['Cd']   , df['Cl'], sty, label='Cl')
+    plot_polar_df(axes, df, sty=sty, label='cfd')
+
     axes[0].set_xlabel('Angle of Attack (deg)')
-    axes[0].set_ylabel('Coefficient')
-    axes[1].set_ylabel('Coefficient')
+    axes[0].set_ylabel('Coefficient [-]')
+    axes[1].set_xlabel('Cd [-]')
+    axes[1].set_ylabel('Cl [-]')
     axes[0].legend()
+    axes[1].legend()
     axes[0].set_title('Cl and Cd vs Angle of Attack')
     axes[0].grid(True)
     axes[1].grid(True)
@@ -180,7 +201,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
 
 def nalu_forces_CLI():
     parser = argparse.ArgumentParser(description="Plot Nalu forces from a CSV file, optionally dimensionless.")
-    parser.add_argument('input', type=str, nargs='+', default='forces.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
+    parser.add_argument('input', type=str, nargs='+', default='forces*.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
     parser.add_argument('--tmin', type=float, default=None, help='Minimum time')
     parser.add_argument('--tmax', type=float, default=None, help='Maximum time')
     parser.add_argument('--chord', type=float, default=1.0, help='Airfoil chord')
@@ -189,10 +210,11 @@ def nalu_forces_CLI():
     parser.add_argument('--U0', type=float, default=None, help='Reference velocity (overrides YAML)')
     parser.add_argument('--dz', type=float, default=1.0, help='Spanwise thickness')
     parser.add_argument('--yaml', type=str, default='input.yaml', help='NALU input YAML file for auto properties')
+    parser.add_argument('--polar-exp', type=str, default=None, help='CSV file with experimental polar data, alpha, Cl, Cd, Cm')
     parser.add_argument('--polar-ref', type=str, default=None, help='CSV file with reference polar data, alpha, Cl, Cd, Cm')
     parser.add_argument('--polar-out', type=str, default=None, help='CSV file with output polar if multiple files provied.')
     parser.add_argument('--no-auto', dest='auto', action='store_false', help='Do not auto-read velocity, density, etc from YAML')
-    parser.add_argument('--dimensionless', action='store_false', help='Plot dimensional forces')
+    parser.add_argument('--forces', dest='dimensionless', action='store_false', help='Plot forces instead of coefficients')
     parser.add_argument('--var', type=str, default='xy', help='Which force components to plot (x, y, or xy)')
     parser.add_argument('--verbose', action='store_true', help='Verbose output')
     args = parser.parse_args()
@@ -208,6 +230,7 @@ def nalu_forces_CLI():
         dz=args.dz,
         yaml_file=args.yaml,
         polar_ref=args.polar_ref,
+        polar_exp=args.polar_exp,
         auto=args.auto,
         dimensionless=args.dimensionless,
         var=args.var,

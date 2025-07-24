@@ -69,27 +69,45 @@ def sort_keys_to_depth(obj, depth=1):
     else:
         return obj
 
+def find_key_recursive(obj, key):
+    """ Recursively find a key in a nested structure """
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for k, v in obj.items():
+            result = find_key_recursive(v, key)
+            if result is not None:
+                return result
+    elif isinstance(obj, list):
+        for item in obj:
+            result = find_key_recursive(item, key)
+            if result is not None:
+                return result
+    return None
+
+
 class YamlEditor:
     """ 
     Some problems:
       - yaml: sort keys, and discard comments
       - ruamel: perserve comments, can sort keys, but looses id and anchor information
     """
-    def __init__(self, filename, reader='ruamel', sort=False):
+    def __init__(self, filename, reader='ruamel', sort=False, profiler=False):
         #if sort:
         #    reader = 'yaml'
         self.filename = filename
         self.reader=reader
 
-        if self.reader=='ruamel':
-            self.yaml = ruamel.yaml.YAML()
-            self.yaml.preserve_quotes = True
-            with open(filename, 'r', encoding='utf-8') as fid:
-                fid.seek(0)
-                self.data = self.yaml.load(fid)
-        else:
-            with open(filename, 'r', encoding='utf-8') as fid:
-                self.data = yaml.safe_load(fid)
+        with Timer('Reading yaml file', silent = not profiler, writeBefore=True):
+            if self.reader=='ruamel':
+                self.yaml = ruamel.yaml.YAML()
+                self.yaml.preserve_quotes = True
+                with open(filename, 'r', encoding='utf-8') as fid:
+                    fid.seek(0)
+                    self.data = self.yaml.load(fid)
+            else:
+                with open(filename, 'r', encoding='utf-8') as fid:
+                    self.data = yaml.safe_load(fid)
 
     def sort(self, inplace=False, depth=2):
         data = self.data
@@ -131,49 +149,258 @@ class YamlEditor:
             print(f"{i}: {l} {c}")
 
 
+
+def bc_target_names(realm):
+    """ Returns a list of all target names for a given realm"""
+    target_names = []
+    for bc in realm['boundary_conditions']:
+        if 'target_name' in bc:
+            if isinstance(bc['target_name'], list):
+                target_names.extend(bc['target_name'])
+            else:
+                target_names.append(bc['target_name'])
+    return target_names
+
+def bc_types(realm):
+    """ Returns a list of all target names for a given realm"""
+    bc_types = []
+    for bc in realm['boundary_conditions']:
+        if 'inflow_boundary_condition' in bc:
+            bc_types.append('inflow')
+        elif 'open_boundary_condition' in bc:
+            bc_types.append('open')
+        elif 'wall_boundary_condition' in bc:
+            bc_types.append('wall')
+        elif 'symmetry_boundary_condition' in bc:
+            bc_types.append('symmetry')
+        elif 'periodic_boundary_condition' in bc:
+            bc_types.append('periodic')
+        elif 'overset_boundary_condition' in bc:
+            bc_types.append('overset')
+        else:
+            bc_types.append('unknown')
+    return bc_types
+
+def bc_summary(realm):
+    """ Returns a list of all target names for a given realm"""
+    bcs = []
+    for bc in realm['boundary_conditions']:
+        if 'inflow_boundary_condition' in bc:
+            key = 'inflow'
+        elif 'open_boundary_condition' in bc:
+            key = 'open'
+        elif 'wall_boundary_condition' in bc:
+            key = 'wall'
+        elif 'symmetry_boundary_condition' in bc:   
+            key = 'symmetry'
+        elif 'periodic_boundary_condition' in bc:
+            key = 'periodic'
+        elif 'overset_boundary_condition' in bc:
+            key = 'overset'
+        else:
+            key = 'unknown'
+        if 'target_name' in bc:
+            target_names = bc['target_name']
+        else:
+            try:
+                target_names = bc['overset_user_data'] ['mesh_group'][0]['mesh_parts']
+            except KeyError:
+                target_names = []
+        bcs.append((key, target_names if isinstance(target_names, list) else [target_names]))
+
+    return bcs
+
+def time_dict(yml):
+    """ return a dictionary with time information from the YAML file """
+    try:
+        restart = yml['realms'][0]['restart']
+        it_start = restart['restart_start']
+    except:
+        it_start =0
+
+    try:
+        ti = yml['Time_Integrators'][0]['StandardTimeIntegrator']
+        dt = ti['time_step']
+        nt_max = ti['termination_step_count']
+    except:
+        dt = np.nan
+        nt_max = np.nan
+    tstart = it_start * dt
+    return {'tstart': tstart, 'dt':dt, 'tmax':nt_max}
+
+def solvers_list(yml):
+    """ return a dictionary with solvers information from the YAML file """
+    #try:
+    solvers = []
+    try:
+        for lins in yml['linear_solvers']:
+            solvers.append({'name': lins['name'], 'type': lins['type'], 'method': lins['method']})
+    except:
+        print('[WARN] No linear solvers found in YAML file')
+
+    return solvers
+#  equation_systems:
+#    max_iterations: 4
+#    name: theEqSys
+#    solver_system_specification:
+#      ndtw: solve_elliptic
+#      pressure: solve_elliptic
+#      specific_dissipation_rate: solve_scalar
+#      turbulent_ke: solve_scalar
+#      velocity: solve_mom
+#    systems:
+#    - WallDistance:
+#        convergence_tolerance: 1e-8
+#        max_iterations: 1
+#        name: myNDTW
+#    - LowMachEOM:
+#        convergence_tolerance: 1e-8
+#        max_iterations: 1
+#        name: myLowMach
+#    - ShearStressTransport:
+#        convergence_tolerance: 1e-8
+#        max_iterations: 1
+#        name: mySST
+
+def equation_systems_specs(realm):
+    sys = realm['equation_systems']
+    niter = sys['max_iterations'] if 'max_iterations' in sys else np.nan
+    specs = sys['solver_system_specification']
+    return specs, niter
+
+
+
+
+
+def process_motion_list(motions):
+    records = []
+    for motion in motions:
+        dx, dy, dz = motion.get('displacement', [None, None, None])
+        ax, ay, az = motion.get('axis', [None, None, None])
+        ox, oy, oz = motion.get('origin', [None, None, None])
+        if az is not None: 
+            if np.abs(az)!=1.0 or np.abs(ax)>0 or np.abs(ay)>0:
+                raise Exception("Axis 0, 0, 1.0 for rotation")
+        if oz is not None and np.abs(oz)>0.0:
+            raise Exception("Origin z must be 0.0")
+        records.append({
+            'type': motion.get('type', 'unknown'),
+            'dth': float(motion.get('angle', np.nan)),
+            'start_time': float(motion.get('start_time', np.nan)),
+            'end_time': float(motion.get('end_time', np.nan)),
+            'ox': ox,
+            'oy': oy,   
+            'dx': dx,
+            'dy': dy,   
+            'dz': dz
+        })
+    df = pd.DataFrame.from_records(records)
+
+    # Separate into rotation and translation DataFrames
+    df_rot = df[df['type'] == 'rotation'].copy()
+    df_tra = df[df['type'] == 'translation'].copy()
+
+    # Compute cumulative values for each
+    df_rot['Time [s]'] = df_rot['end_time'].cummax()
+    df_tra['Time [s]'] = df_tra['end_time'].cummax()
+
+    df_rot['dt'] = df_rot['end_time']-df_rot['start_time']
+    df_tra['dt'] = df_tra['end_time']-df_rot['start_time']
+    # Compute difference between last end time and current start time, offset by 1 index
+    df_rot['dt_prev'] = df_rot['start_time'].shift(-1)-df_rot['end_time']
+    df_tra['dt_prev'] = df_tra['start_time'].shift(-1)-df_tra['end_time']
+
+    df_rot['ox'] = df_rot['ox'].cumsum()
+    df_rot['oy'] = df_rot['oy'].cumsum()
+
+    df_rot['angle']    = df_rot['dth'].cumsum()
+    df_tra['x'] = df_tra['dx'].cumsum()
+    df_tra['y'] = df_tra['dy'].cumsum()
+    df_tra['z'] = df_tra['dz'].cumsum()
+
+    # Drop unused columns
+    df_rot = df_rot[['Time [s]', 'angle', 'ox', 'oy']]
+    df_tra = df_tra[['Time [s]', 'x', 'y', 'z']]
+
+    # Merge/interpolate on Time (outer join, then interpolate missing values)
+    df = pd.merge(df_rot, df_tra, on='Time [s]', how='outer').sort_values('Time [s]').reset_index(drop=True)
+    df = df.interpolate(method='linear', limit_direction='both')
+
+    # --- Debug prints for DataFrames
+    #print('df_rot:')
+    #print(df_rot)
+    #print('df_tra:')
+    #print(df_tra)
+    #print('df:')
+    #print(df)
+    return df, df_rot, df_tra
+
+
+
 class NALUInputFile(YamlEditor):
 
-    def __init__(self, filename, reader='ruamel'):
+    def __init__(self, filename, reader='yaml', profiler=True):
         """ Initialize NALUInputFile with a YAML file path """
-        super().__init__(filename=filename, reader=reader)
+        super().__init__(filename=filename, reader=reader, profiler=profiler)
 
     def __repr__(self):
-            s = f"<{type(self).__name__} object>\n"
+            s = f"<{type(self).__name__} object read with {self.reader}>\n"
             s += f" - filename: {self.filename}\n"
+            realms = self.data.get('realms', [])
+            s += f" * realms: {self.realm_names} ({len(realms)})\n"
             try:
-                realms = self.data.get('realms', [])
-                s += f" - Number of realms: {len(realms)}\n"
                 for i, realm in enumerate(realms):
-                    s += f"   * Realm {i}: name={realm.get('name', 'N/A')}\n"
+                    s += f"   - realm {i}: name={realm.get('name', 'N/A')}\n"
                     mesh = realm.get('mesh', realm.get('meshes', 'N/A'))
                     s += f"     - mesh: {mesh}\n"
                     if 'material_properties' in realm:
-                        mats = realm['material_properties'].get('target_name', 'N/A')
+                        mats = str(realm['material_properties'].get('target_name', 'N/A')).replace("'","").replace("[","").replace("]","")
                         s += f"     - material: {mats}\n"
                     if 'boundary_conditions' in realm:
-                        s += f"     - boundary_conditions: {len(realm['boundary_conditions'])}\n"
+                        bcs = str(bc_summary(realm)).replace("'","").replace(", [",":").replace("]","").replace("[","").replace("), ("," | ").replace("(", "").replace(")","")
+                        s += f"     - boundary_conditions: {bcs}\n"
+                        
                     if 'initial_conditions' in realm:
                         s += f"     - initial_conditions: {len(realm['initial_conditions'])}\n"
+                        
                     if 'mesh_motion' in realm:
                         s += f"     - mesh_motion: present, size:{len(realm['mesh_motion'])}\n"
+                        for mesh_motion in realm['mesh_motion']:
+                            motions_list = mesh_motion['motion']
+                            df, _, _ = process_motion_list(motions_list)
+                            s += f"          - size:{len(df)} tmin:{df['Time [s]'].min():.3f} tmax:{df['Time [s]'].max():.3f} xmax:{df['x'].max():.3f} ymax:{df['y'].max():.3f} thmax:{df['angle'].max():.3f}\n"
+                specs, niter = equation_systems_specs(realms[0])
+                s += "     - equations_system: iterations:{},  specs:\n".format(niter)
             except Exception as e:
                 s += f" [Error reading realms: {e}]\n"
+            for k,v in specs.items():
+                s += "         - {:30s}: {:15s}\n".format(k,v)
+            try: 
+                for i, sol in  enumerate(solvers_list(self.data)):
+                    s += f" * solver[{i}] : name:{sol['name']:15s} type:{sol['type']:10s} method:{sol['method']:15s}\n"
+            except Exception:
+                s += f" * solvers : [not found]\n"
+
+            s += f" * turbulence_model : {self.turbulence_model}\n" 
+            s += f" * transition_model : {self.transition_model}\n" 
+
             # Computed properties
-            s += f" * realm_names: {self.realm_names}\n"
-            try:
-                s += f" * velocity  : {self.velocity}\n"
-            except Exception:
-                s += f" * velocity  : [not found]\n"
-            try:
-                s += f" * density   : {self.density}\n"
-            except Exception:
-                s += f" * density   : [not found]\n"
-            try:
-                s += f" * viscosity : {self.viscosity}  (nu)\n"
-            except Exception:
-                s += f" * viscosity : [not found]\n"
+            nu  = self.viscosity
+            vel = self.velocity
+            rho = self.density
+            U0  = np.linalg.norm(vel)
+            Re  = rho*U0*1/nu/ 1e6
+            time_dict = self.time_dict
+            dt = time_dict['dt']
+            dt_rule_of_thumb = 0.02 * 1  / U0
+            s += f" * time      : {time_dict}  (dt_rec~{dt_rule_of_thumb:.4f} if chord=1)\n"
+            s += f" * velocity  : {vel}\n"
+            s += f" * density   : {rho}\n"
+            s += f" * viscosity : {nu}  (nu)\n"
+            s += f" * Reynolds  ~ {Re:.1f}M (if chord=1)\n"
+
             s += "methods:\n"
-            s += " - sort, extract_mesh_motion, check, print\n"
+            s += " - sort, extract_mesh_motion, check, print"
             return s
     @property
     def realm_names(self):
@@ -191,7 +418,8 @@ class NALUInputFile(YamlEditor):
                 if 'value' in ic:
                     if 'velocity' in ic['value']:
                         return ic['value']['velocity']
-        raise Exception('Unable to extract velocity from yaml file')
+        #raise Exception('Unable to extract velocity from yaml file')
+        return np.nan
 
     @property
     def density(self):
@@ -200,7 +428,8 @@ class NALUInputFile(YamlEditor):
             for specs in realm['material_properties']['specifications']:
                 if specs['name'] == 'density':
                     return specs['value']
-        raise Exception('Unable to extract density from yaml file')
+        #raise Exception('Unable to extract density from yaml file')
+        return np.nan
 
     @property
     def viscosity(self):
@@ -210,8 +439,47 @@ class NALUInputFile(YamlEditor):
             for specs in realm['material_properties']['specifications']:
                 if specs['name'] == 'viscosity':
                     return specs['value']
-        raise Exception('Unable to extract density from yaml file')
+        #raise Exception('Unable to extract density from yaml file')
+        return np.nan
 
+    @property
+    def turbulence_model(self):
+        model = find_key_recursive(self.data, 'turbulence_model')
+        if model is None:
+            return 'unknown'
+            #raise Exception('Unable to extract turbulence_model from yaml file')
+        return model
+
+    @property
+    def transition_model(self):
+        transition = find_key_recursive(self.data, 'transition_model')
+        if transition is None:
+            return 'unknown'
+            #raise Exception('Unable to extract transition_model from yaml file')
+        return transition
+    
+    @property
+    def bc_target_names(self):
+        """ Returns a list of all target names for boundary conditions """
+        target_names = []
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'target_name' in bc:
+                    if isinstance(bc['target_name'], list):
+                        target_names.extend(bc['target_name'])
+                    else:
+                        target_names.append(bc['target_name'])
+        return target_names
+
+    @property
+    def time_dict(self):
+        """ Returns [tstart, dt, tmax] """
+        return time_dict(self.data)
+
+    @property
+    def solvers_dict(self):
+        """ Returns [tstart, dt, tmax] """
+        return solvers_dict(self.data)
 
     def extract_mesh_motion(self, plot=False, csv_file=None, export=False):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
@@ -235,68 +503,8 @@ class NALUInputFile(YamlEditor):
         # --- Store all motions in a DataFrame
         motions = mesh_motion[0]['motion']
         print(len(motions))
-        records = []
-        for motion in motions:
-            dx, dy, dz = motion.get('displacement', [None, None, None])
-            ax, ay, az = motion.get('axis', [None, None, None])
-            ox, oy, oz = motion.get('origin', [None, None, None])
-            if az is not None: 
-                if np.abs(az)!=1.0 or np.abs(ax)>0 or np.abs(ay)>0:
-                    raise Exception("Axis 0, 0, 1.0 for rotation")
-            if oz is not None and np.abs(oz)>0.0:
-                raise Exception("Origin z must be 0.0")
-            records.append({
-                'type': motion.get('type', 'unknown'),
-                'dth': float(motion.get('angle', np.nan)),
-                'start_time': float(motion.get('start_time', np.nan)),
-                'end_time': float(motion.get('end_time', np.nan)),
-                'ox': ox,
-                'oy': oy,   
-                'dx': dx,
-                'dy': dy,   
-                'dz': dz
-            })
-        df = pd.DataFrame.from_records(records)
 
-        # Separate into rotation and translation DataFrames
-        df_rot = df[df['type'] == 'rotation'].copy()
-        df_tra = df[df['type'] == 'translation'].copy()
-
-        # Compute cumulative values for each
-        df_rot['Time [s]'] = df_rot['end_time'].cummax()
-        df_tra['Time [s]'] = df_tra['end_time'].cummax()
-
-        df_rot['dt'] = df_rot['end_time']-df_rot['start_time']
-        df_tra['dt'] = df_tra['end_time']-df_rot['start_time']
-        # Compute difference between last end time and current start time, offset by 1 index
-        df_rot['dt_prev'] = df_rot['start_time'].shift(-1)-df_rot['end_time']
-        df_tra['dt_prev'] = df_tra['start_time'].shift(-1)-df_tra['end_time']
-
-
-        df_rot['ox'] = df_rot['ox'].cumsum()
-        df_rot['oy'] = df_rot['oy'].cumsum()
-
-        df_rot['angle']    = df_rot['dth'].cumsum()
-        df_tra['x'] = df_tra['dx'].cumsum()
-        df_tra['y'] = df_tra['dy'].cumsum()
-        df_tra['z'] = df_tra['dz'].cumsum()
-
-        print('df_rot:')
-        print(df_rot)
-        print('df_tra:')
-        print(df_tra)
-
-        # Drop unused columns
-        df_rot = df_rot[['Time [s]', 'angle', 'ox', 'oy']]
-        df_tra = df_tra[['Time [s]', 'x', 'y', 'z']]
-
-        # Merge/interpolate on Time (outer join, then interpolate missing values)
-        df = pd.merge(df_rot, df_tra, on='Time [s]', how='outer').sort_values('Time [s]').reset_index(drop=True)
-        df = df.interpolate(method='linear', limit_direction='both')
-
-        # --- Debug prints for DataFrames
-        print('df:')
-        print(df)
+        df, df_rot, df_tra = process_motion_list(motions)
 
         if export: 
             if csv_file is None:
@@ -379,7 +587,7 @@ class NALUInputFile(YamlEditor):
             # Check for 'mesh_transformation' key
             for mt in realm.get('mesh_transformation', []):
                 for mp in mt['mesh_parts']:
-                    if mp not in names['blocks']:
+                    if mp.lower() not in names['blocks']:
                         errors.append(f"Mesh part '{mp}' in realm {i} not found in exodus file (allowed: {names['blocks']}).")
             # Check for turbulence averaging
             if 'turbulence_averaging' in realm:
@@ -416,7 +624,7 @@ class NALUInputFile(YamlEditor):
             print("[ OK ] All checks passed.")
         return errors
 
-def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False, reader='ruamel', verbose=False):
+def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False, reader='yaml', verbose=False, profiler=False):
     """
     Main function to handle NALU input file operations.
     :param input_file: Path to the NALU YAML input file.
@@ -428,7 +636,7 @@ def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False
     """
     if verbose:
         print('NALUInputFile: Reading', input_file)
-    yml = NALUInputFile(input_file, reader=reader)
+    yml = NALUInputFile(input_file, reader=reader, profiler=profiler)
 
     # --- Print class to file
     print(yml)
@@ -438,14 +646,12 @@ def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False
     if sort:
         if overwrite:
             yml.save(sort=True)
-            if verbose:
-                print(f"[INFO] File {input_file} sorted and overwritten.")
+            print(f"[INFO] Sorted file written to: {input_file}   (overwritten)")
         else:
             outpath = input_file.replace(".yaml", "_sorted.yaml")
             yml.save(outpath=outpath, sort=True)
-            if verbose:
-                print(f"[INFO] Sorted file written to {outpath} (original not overwritten).")
-                print(f"       yaml reader: {yml.reader}")
+            print(f"[INFO] Sorted file written to: {outpath}   (otherwise use --overwrite).")
+            #print(f"       yaml reader: {yml.reader}")
 
 
 def nalu_input_CLI():
@@ -455,11 +661,12 @@ def nalu_input_CLI():
     parser.add_argument("--sort", action="store_true", help="Standardize/sort the YAML file")
     parser.add_argument("-overwrite", action="store_true", help="Overwrite input file (default: False)")
     parser.add_argument("--no-check", action="store_true", help="Do not check YAML file for existing files and domains")
-    parser.add_argument("--reader", default='ruamel', help="Specify reader: 'yaml' or 'ruamel' (default: ruamel). Note: yaml sorts but looses comments. Ruamel sorts the first two levels only.", choices=['yaml', 'ruamel'])
+    parser.add_argument("--reader", default='yaml', help="Specify reader: 'yaml' or 'ruamel' (default: ruamel). Note: yaml sorts but looses comments. Ruamel sorts the first two levels only.", choices=['yaml', 'ruamel'])
+    parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
-    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader)  
+    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler)  
 
 if __name__ == '__main__':
 

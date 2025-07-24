@@ -283,7 +283,8 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
                  verbose=False, debug=False, 
                  check_zpos=True,
                  block_base='fluid', inlet_name='inlet', outlet_name='outlet',
-                 legacy=False
+                 legacy=False,
+                 final_print=True
                  ):
     if legacy:
         plt3d2exo_legacy(input_file, output_file, block_base=block_base, inlet_name=inlet_name, outlet_name=outlet_name)
@@ -336,7 +337,7 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
                                angle_center=angle_center, inlet_start=inlet_start, inlet_span=inlet_span, outlet_start=outlet_start,
                                inlet_name=inlet_name, outlet_name = outlet_name
                                )
-    write_exodus(output_file, coords, conn0+1, verbose=True, side_sets=side_sets, block_name=block_name, num_dim=num_dim, title='airfoil')
+    write_exodus(output_file, coords, conn0+1, verbose=final_print, side_sets=side_sets, block_name=block_name, num_dim=num_dim, title='airfoil')
 
     if debug and flatten:
         n=dims[0][0]
@@ -350,6 +351,7 @@ def plt3d2exo(input_file, output_file=None, flatten=True, angle_center=None, inl
                     break
         plt.plot(x,y, '-')
         plt.show()
+    return output_file
 
 def plt3d2exo_CLI():
     """

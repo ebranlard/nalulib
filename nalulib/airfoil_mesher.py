@@ -11,7 +11,9 @@ from nalulib.airfoillib import airfoil_get_xy, _DEFAULT_REL_TOL
 
 def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=True, respline=True, Re=1e6, 
                  outputfile=None, format=None, output_format=None, verbose=False, plot=False, thick=True, 
-                 a_hyp=2.5, **kwargs):
+                 a_hyp=2.5, 
+                 TE_type=None,
+                 **kwargs):
     # Get airfoil coordinates based on multiple types of inputs for convenience
     x, y = airfoil_get_xy(airfoil_coords_wrap, format=format)
 
@@ -22,18 +24,21 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
     #print('d', d)
     #x, y, d = normalize_airfoil_coords(x, y, d=d, reltol=_DEFAULT_REL_TOL, verbose=verbose)
 
-    arf = StandardizedAirfoilShape(x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=verbose)
+    arf = StandardizedAirfoilShape(x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=verbose, TE_type=TE_type)
+    print('[INFO] Airfoil TE type detected as:', arf._TE_TYPE, '     (otherwise, use --te-type option)')
     if verbose:
         print(arf)
     if plot:
         arf.plot(title='Original')
 
     if respline and method != 'refine' and method != 'none':
-        arf = arf.resample_spline(n_surf=500, inplace=True)
+        print('[INFO] Performing respline before meshing. TE_type should be preserved.', arf._TE_TYPE)
+        nx = len(arf.x)
+        arf = arf.resample_spline(n_surf=5*nx, inplace=True)
         if plot:
             arf.plot(title='Resplined')
-        #if verbose:
-        #    print(arf)
+        if verbose:
+            print(arf)
     else:
         print('[INFO] No respline before meshing, using original coordinates.')
 
@@ -91,11 +96,12 @@ def mesh_airfoil_CLI():
     parser.add_argument("--a_hyp", type=float, default=2.5, help="Hyperbolic clustering parameter (used if method='hyperbolic').")
     parser.add_argument("--format", type=str, default=None, help="Input format (e.g. 'csv', 'pointwise') if input file provided. If omitted, the fileformat is inferred from the extension.")
     parser.add_argument("--output-format", type=str, default=None, help="Output format (e.g. 'csv', 'pointwise') if output file provided.")
-    parser.add_argument("--no-respline", action="store_true", help="Do not respline before meshing.")
+    parser.add_argument("--respline", action="store_true", help="Respline before meshing. This could lead to changes.")
     parser.add_argument("--check", action="store_true", help="Check mesh quality.")
     parser.add_argument("--no-thick", action="store_true", help="No thick outputs for pointwise output format.")
     parser.add_argument("--plot", action="store_true", help=" Plot mesh.")
     parser.add_argument("--Re", type=float, default=1e6, help="Reynolds number for mesh checks.")
+    parser.add_argument("--te-type", type=str, default=None, help="Type of trailing edge (e.g. 'blunt', 'sharp', 'None'). If specified, the specified, the class will attempt to preserve it, and in particular preserve the TE angle (beta feature).")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
 
     args = parser.parse_args()
@@ -108,13 +114,14 @@ def mesh_airfoil_CLI():
         check=args.check,
         plot=args.plot,
         thick=not args.no_thick,
-        respline=not args.no_respline,
+        respline=args.respline,
         Re=args.Re,
         outputfile=args.output,
         format=args.format,
         output_format=args.output_format,
         verbose=args.verbose,
-        a_hyp=args.a_hyp
+        a_hyp=args.a_hyp,
+        TE_type=args.te_type
     )
 
 
