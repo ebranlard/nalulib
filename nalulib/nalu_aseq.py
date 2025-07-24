@@ -60,14 +60,13 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
     print('----------------------------------------------------------------------------')
     mesh_dir = os.path.join(base_dir, 'meshes')
     myprint('Creating meshes in : ', mesh_dir)
-    center = (0.0, 0.0)
     # creating a directory "meshes" if it does not exist
     if not os.path.exists(mesh_dir):
         os.makedirs(mesh_dir)
     angles = aseq - aoa_ori
     mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:04.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
-    exo_rotate(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name)
+    exo_rotate(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name, keep_io_side_set=keep_io_side_set)
     print('----------------------------------------------------------------------------')
 
 

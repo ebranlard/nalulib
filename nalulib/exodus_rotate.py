@@ -165,10 +165,11 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
                     elem_to_face_nodes[(elem, side)] = face_node_ids
 
     # Find inlet and outlet angular segments (before rotation)
-    if inlet_start is None or inlet_span is None or outlet_start is None:
-        with Timer("Finding inlet and outlet angular segments", silent=not profiler):
-            inlet_start, inlet_span, outlet_start  = inlet_outlet_angle_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, 
-                inlet_name=inlet_name, outlet_name=outlet_name, debug=verbose, verbose=verbose)
+    if not keep_io_side_set:
+        if inlet_start is None or inlet_span is None or outlet_start is None:
+            with Timer("Finding inlet and outlet angular segments", silent=not profiler):
+                inlet_start, inlet_span, outlet_start  = inlet_outlet_angle_segments(side_sets, node_coords, angle_center, elem_to_face_nodes, 
+                    inlet_name=inlet_name, outlet_name=outlet_name, debug=debug, verbose=verbose)
     
     if hasattr(angle, '__len__'):
         angles = angle
@@ -188,8 +189,7 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
         with Timer("Rotating node coordinates", silent=not profiler):
             rotated_coords = rotate_coordinates(node_coords, np.radians(angle), center)
         
-        #if debug:
-            print('>>>> DEBUG')
+        if debug:
             blk_id = exo.get_element_block_ids()[0]
             blk_info = exo.get_element_block(blk_id)
             conn = exo.get_element_conn(blk_id)

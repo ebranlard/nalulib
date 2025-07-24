@@ -34,6 +34,30 @@ def exodus_get_names(filename, lower=False):
         names = {k: [name.lower() for name in v] for k, v in names.items()}
     return names
 
+def print_elements(conn, node_coords, element_ids=None, ne=None, blk_type='quad'):
+    if ne is None: 
+        ne = len(conn)
+    if element_ids is None:
+        element_ids = range(conn.shape[0])
+    for i, elem_id in enumerate(element_ids[:ne]):
+        node_ids = conn[i]
+        if blk_type.lower() in ['quad']:
+            orientation = {True: 'positive', False:'negative'}[quad_is_positive_about_z(node_ids, node_coords, ioff=1)]
+            print(f"Element ID: {elem_id}, Node IDs: {node_ids}, Orientation: {orientation}")
+        else:
+            print(f"Element ID: {elem_id}, Node IDs: {node_ids}")
+
+def print_nodes(coords, node_ids=None, nn=None):
+    if nn is None:
+        nn = len(coords)    
+    if node_ids is None:
+        node_ids = range(1, nn + 1)
+
+    for i, node_id in enumerate(node_ids[:nn]):
+        print(f"Node ID: {node_id}, Coordinates: {coords[i]}")
+
+
+
 def explore_exodus_file(filename, n=5, nss=10):
     print(f"Filename:                 {filename}")
     with ExodusIIFile(filename, mode="r") as exo:
@@ -111,12 +135,18 @@ def explore_exodus(exo, n=5, nss=10):
     for i, node_id in enumerate(node_ids[:nn]):
         coords = node_coords[i]
         print(f"Node ID: {node_id}, Coordinates: {coords}")
+    print_nodes(node_coords, node_ids=node_ids, nn=nn)
 
 
-    # Display the first n elements
-    ne = min(n, exo.num_elems())
-    print("\n--- First {}/{} Elements ---".format(ne, exo.num_elems()))
+    # --- Elements 
+    print("\n--- All Blocks Elements: {} ---".format(exo.num_elems()))
     element_ids = exo.get_element_id_map()
+    # TODO warn if element_ids are not consecutive
+    print("Element IDs range from: {} to {}, number of elements: {}".format(np.min(element_ids), np.max(element_ids), len(element_ids)-1))
+    if np.max(element_ids)!=len(element_ids):
+        warnings.append(f"Element IDs are not consecutive. IDs min-max [{np.min(element_ids)} {np.max(element_ids)}], number of elements: {len(element_ids)-1} (are we multiblock?).")
+    if np.min(element_ids)!=1:
+        warnings.append(f"First Element ID is not 1")
 
     for block_id in exo.get_element_block_ids():
         block_info = exo.get_element_block(block_id)
@@ -131,15 +161,17 @@ def explore_exodus(exo, n=5, nss=10):
         #        num_elem_attrs=self.num_attr(block_id),
         #    )
         # name=self.get_element_block_name(block_id),
+        ne = min(n, exo.num_elems())
+        print("\n--- First {}/{} Elements ---".format(ne, exo.num_elems()))
         print(f"Block ID: {block_info.id}, Type: {block_info.elem_type}, Name: {block_info.name}, nElem: {block_info.num_block_elems}, Nodes/Block: {block_info.num_elem_nodes}")
         elem_conn = exo.get_element_conn(block_id)
-        for i, elem_id in enumerate(element_ids[:ne]):
-            nodes = elem_conn[i]
-            if block_info.elem_type.lower() in ['quad']:
-                orientation = {True: 'positive', False:'negative'}[quad_is_positive_about_z(nodes, node_coords, ioff=1)]
-                print(f"Element ID: {elem_id}, Node IDs: {nodes}, Orientation: {orientation}")
-            else:
-                print(f"Element ID: {elem_id}, Node IDs: {nodes}")
+        print("Element Nodes IDs range from: {} to {}, number of nodes: {}".format(np.min(elem_conn), np.max(elem_conn), len(node_coords)-1))
+        if np.min(elem_conn)!=1:
+            warnings.append(f"Minimum node ID is not 1 in element connectivity. Connectivity min-max IDs [{np.min(elem_conn)} {np.max(elem_conn)}], number of coords: {len(node_coords)-1}")
+        if np.max(elem_conn)!=len(node_coords):
+            warnings.append(f"Element connectivity does not cover all nodes exactly. Connectivity min-max IDs [{np.min(elem_conn)} {np.max(elem_conn)}], number of coords: {len(node_coords)-1}")
+        print_elements(elem_conn, node_coords, element_ids=element_ids, ne=ne, blk_type=block_info.elem_type)
+
         # --- Count negative quads
         if block_info.elem_type.lower() in ['quad']:
             block_info = exo.get_element_block(block_id)
