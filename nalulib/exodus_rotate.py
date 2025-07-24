@@ -28,7 +28,7 @@ def rotate_coordinates(coords, angle, center):
     x_center, y_center = center
     # Subtract the center to shift the rotation origin
     x1 = coords[:, 0] - x_center
-    y1 = coords[:, 1] - x_center
+    y1 = coords[:, 1] - y_center
     # Apply the rotation matrix
     cos_angle = np.cos(angle)
     sin_angle = np.sin(angle)
@@ -255,7 +255,7 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
                     num_elem_blk=exo.num_elem_blk(),
                     num_node_sets=exo.num_node_sets(),
                     num_side_sets=len(side_sets),
-                    double=True
+                    double=False
                 )
                 if num_dim == 2:
                     exo_out.put_coord(rotated_coords[:, 0], rotated_coords[:, 1])
