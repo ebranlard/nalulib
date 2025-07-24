@@ -184,6 +184,53 @@ def force_quad_positive_about_z(conn, coords, verbose=False, ioff=1):
             raise Exception('Sanity check for now, we should likely reverse all or nothing')
     return conn
 
+def negative_quads(conn, coords, ioff, full_coverage_check=False, plot=False, old_coords=None):
+    """
+    For each quad in conn, check if it is positive about z using quad_is_positive_about_z.
+    We force the user to think about the connectivity indexing with ioff
+    """
+    nquads = conn.shape[0]
+    conn_min = np.min(conn)
+    if conn_min==0:
+        if ioff!=0:
+            raise Exception("Connectivity starts at 0, ioff should be 0")
+    elif conn_min==1:
+        if ioff!=1:
+            raise Exception("Connectivity starts at 1 but ioff is 0, it's ok, but not currently anticipated. Contact dev")
+        pass # Hopefully the user knows
+    else:
+        raise Exception('The code should work in that case, but such application are currently not anticipated. Contact dev.')
+    if np.max(conn)!=len(coords)+ioff-1:
+        if full_coverage_check:
+            raise Exception('[WARN] count_quad is called with a connectivity that doesnt cover the nodes exactly. Connecitivyt min-max IDs [{} {}], number of coords: {}'.format(conn_min, np.max(conn), len(coords)-1+ioff))
+    Ineg = []
+    nNeg=0
+    for iquad in range(nquads):
+        if not quad_is_positive_about_z(conn[iquad], coords, ioff=ioff):
+            Ineg.append(iquad)
+            nNeg+=1
+    # --- Plot
+    if plot:
+        import matplotlib.pyplot as plt
+        fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
+        fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+
+        for iquad in Ineg[:3]:
+            pts = np.asarray([coords[n-ioff][:2] for n in conn[iquad]])
+            pts = np.vstack([pts, pts[0]])  # Close the quad
+            ax.plot(pts[:, 0], pts[:, 1], 'k-') #, label=f'Quad {iquad}')
+
+            if old_coords is not None:
+                old_pts = np.asarray([old_coords[n-ioff][:2] for n in conn[iquad]])
+                old_pts = np.vstack([old_pts, old_pts[0]])
+                ax.plot(old_pts[:, 0], old_pts[:, 1], 'r--', label=f'Old Quad {iquad}')
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.legend()
+        #ax.set_aspect('equal', adjustable='box')
+    return Ineg
+
 
 
 # --------------------------------------------------------------------------

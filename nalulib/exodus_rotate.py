@@ -125,6 +125,8 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
     """
 
     # --- Default arguments
+    if center is None:
+        center =(0.0, 0.0)
     # Determine angle center
     angle_center = tuple(angle_center) if angle_center else tuple(center)
 
@@ -180,17 +182,31 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
     # --- Loop on different angles
     for i, (angle, output_file) in enumerate(zip(angles, output_files)):
         if verbose:
-            print(f"Rotating by {angle} degrees (output file: {output_file})")
+            print('Rotating about center:', center, 'by angle:', angle, '(output file: {output_file})')
 
         # Rotate node coordinates
         with Timer("Rotating node coordinates", silent=not profiler):
-            if verbose:
-                print('Rotating about center:', center, 'by angle:', angle)
             rotated_coords = rotate_coordinates(node_coords, np.radians(angle), center)
+        
+        #if debug:
+            print('>>>> DEBUG')
+            blk_id = exo.get_element_block_ids()[0]
+            blk_info = exo.get_element_block(blk_id)
+            conn = exo.get_element_conn(blk_id)
+            if blk_info.elem_type.lower() in ['quad']:
+                from nalulib.exodus_core import negative_quads
+                import matplotlib.pyplot as plt
+                Ineg1 = negative_quads(conn, node_coords, ioff=1, plot=False)
+                print(f"Negative quads before rotation: {len(Ineg1)} - len(conn)", len(conn))
+                Ineg2 = negative_quads(conn, rotated_coords, ioff=1, plot=True, old_coords=node_coords)
+                print(f"Negative quads after rotation: {len(Ineg2)}")
+                if len(Ineg2)>0:
+                    plt.show()
 
         # Adjust side sets if needed
         if not keep_io_side_set:
             if verbose:
+                print('[INFO] Adjusting side sets...')
                 print(f"Angle center       : {angle_center}")
                 print(f"Angle span, inlet  : Start={np.degrees(inlet_start):5.1f}°, Span={np.degrees(inlet_span):5.1f}° (anticlockwise)")
                 print(f"Angle span, outlet : Start={np.degrees(outlet_start):5.1f}°, Span={np.degrees(2*np.pi-inlet_span):5.1f}° (anticlockwise)")
