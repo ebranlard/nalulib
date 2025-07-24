@@ -6,7 +6,7 @@ from nalulib.exodus_info import explore_exodus_file
 from nalulib.exodus_airfoil_layers import extract_airfoil_geometry
 from nalulib.exodus_hex2quads import hex_to_quads_plane
 from nalulib.exodus_quads2hex import quads_to_hex
-from nalulib.exodus_rotate import rotate_exodus
+from nalulib.exodus_rotate import exo_rotate
 from nalulib.nalu_aseq import nalu_aseq
 from nalulib.nalu_restart import nalu_prepare_restart
 
@@ -65,7 +65,7 @@ def main(cleanUp=False, verbose=False):
     # --- Rotate mesh by 30 deg
     print_section('rotate')
     print_command('exo-rotate   diamond_n20.exo -a 30             # Rotate mesh by 30 deg')
-    rotate_exodus(
+    exo_rotate(
         input_file="diamond_n20.exo", output_file=None,  
         angle=30, center=(0, 0),
         angle_center=None, inlet_start=None, inlet_span=None, outlet_start=None,

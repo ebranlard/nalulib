@@ -5,7 +5,7 @@ from nalulib.exodus import exo_info
 from nalulib.exodus import exo_layers
 from nalulib.exodus import exo_hex2quads, exo_flatten
 from nalulib.exodus import exo_quads2hex, exo_zextrude
-from nalulib.exodus import exo_rotate
+from nalulib.exodus import exo_rotate_CLI
 from nalulib.gmesh import gmsh2exo
 from nalulib.nalu_input import nalu_input_CLI
 from nalulib.nalu_restart import nalu_restart

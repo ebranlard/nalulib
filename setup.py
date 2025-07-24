@@ -13,7 +13,7 @@ setup(
             'exo-info=nalulib.cli:exo_info',
             'exo-flatten=nalulib.cli:exo_flatten',
             'exo-zextrude=nalulib.cli:exo_zextrude',
-            'exo-rotate=nalulib.cli:exo_rotate',
+            'exo-rotate=nalulib.cli:exo_rotate_CLI',
             'exo-layers=nalulib.cli:exo_layers',
             'nalu-input=nalulib.cli:nalu_input_CLI',
             'nalu-restart=nalulib.cli:nalu_restart',

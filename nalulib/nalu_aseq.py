@@ -11,12 +11,12 @@ import glob
 from nalulib.essentials import *
 from nalulib.nalu_input import *
 from nalulib.nalu_batch import nalu_batch
-from nalulib.exodus_rotate import rotate_exodus
+from nalulib.exodus_rotate import exo_rotate
 
 
 
 def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
-        inlet_name='inlet', outlet_name='outlet', submit=False):
+        inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False):
     myprint('Input YAML file', input_file)
     # Basename
     base_dir = os.path.dirname(input_file)
@@ -67,7 +67,7 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
     angles = aseq - aoa_ori
     mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:04.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
-    rotate_exodus(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name)
+    exo_rotate(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name)
     print('----------------------------------------------------------------------------')
 
 
@@ -145,7 +145,9 @@ def nalu_aseq_CLI():
     parser.add_argument("input_file", default='input.yaml', nargs="?", help="Input YAML file")
 #    parser.add_argument("-o", "--output_file", default=None, help="Output YAML file (optional, default: input_runNRUN.yaml)")
     parser.add_argument("-a", type=float, nargs=3, default=None, help="Alpha sequence (start, stop, step) (optional, default: -15 to 15 in steps of 3)")
+    parser.add_argument("-c", "--center", type=float, nargs=2, default=(0.0, 0.0), help="Center of rotation (x, y). Default is (0.0, 0.0).")
     parser.add_argument("-b", "--batch_file", default=None, help="Batch file template (optional)")
+    parser.add_argument("--keep-io-side-set", action="store_true", help="Keep inlet and outlet side sets unchanged, otherwise, they are adapted.")
     parser.add_argument("-j", "--jobname", default='', help="Jobname prefix (optional)")
     parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel", "local"], help="Cluster type. If local, only one batch file is created.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
@@ -162,6 +164,8 @@ def nalu_aseq_CLI():
         input_file=args.input_file,
         aseq=args.a,
 #        output_file=args.output_file,
+        center=tuple(args.center),
+        keep_io_side_set=args.keep_io_side_set,
         verbose=args.verbose,
         batch_file=args.batch_file,
         cluster=args.cluster,

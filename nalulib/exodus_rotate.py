@@ -103,10 +103,10 @@ def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nod
 
     return inlet_start, inlet_span, outlet_start
 
-def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=None, 
+def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None, 
                   inlet_start=None, inlet_span=None, outlet_start=None, keep_io_side_set=False, 
                   inlet_name='inlet', outlet_name='outlet',
-                  verbose=False, profiler=False):
+                  verbose=False, profiler=False, debug=False):
     """
     Rotate an Exodus file's node coordinates and adjust side sets.
 
@@ -263,7 +263,7 @@ def rotate_exodus(input_file, output_file, angle, center=(0,0), angle_center=Non
                     exo_out.put_side_set_name(side_set_id, side_set_data["name"])
         print(f"Written Exodus file: {output_file}")
 
-def exo_rotate():
+def exo_rotate_CLI():
     """
     Command-line interface for rotating an Exodus file.
     """
@@ -277,7 +277,7 @@ def exo_rotate():
     parser.add_argument("--bc-angles-half", action="store_true", help="Set inlet and outlet angles to predefined values (90°, 270° with 180° spans).")
     parser.add_argument("--bc-angles", type=float, nargs=2, metavar=("INLET_START", "INLET_SPAN"),
                         help="Define inlet start and inlet span (in degrees), anticlockwise.")
-    parser.add_argument("--verbose", default=False, action="store_true", help="Enable verbose output.")
+    parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Enable verbose output.")
     parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
     parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
     parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
@@ -300,7 +300,7 @@ def exo_rotate():
         inlet_span = None
         outlet_start = None
 
-    rotate_exodus(
+    exo_rotate(
         input_file=args.input_file,
         output_file=args.output_file,
         angle=args.angle,
@@ -317,5 +317,5 @@ def exo_rotate():
     )
 
 if __name__ == "__main__":
-    exo_rotate()
+    exo_rotate_CLI()
     plt.show()
