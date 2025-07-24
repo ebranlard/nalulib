@@ -3,7 +3,7 @@ import os
 from nalulib.essentials import myprint
 
 
-def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False, jobname=None):
+def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False, jobname=None, mail=False):
     """ Create a batch file for a nalu simulation based on a template and a cluster"""
     if batch_file_template is None:
         if cluster == 'unity':
@@ -25,6 +25,10 @@ def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, ver
             if '--job-name' in line:
                 # Replace the line with the new job name
                 lines[i] = "#SBATCH --job-name={}\n".format(jobname)
+            if '--mail-user=' in line and mail:
+                pass # allow email..
+            else:
+                lines[i] = '#' + line  # Comment the line
         if line.startswith('nalu_input'):
             nalu_input_file = nalu_input_file.replace('./','').replace('.\\','')
             lines[i] = "nalu_input={}".format(nalu_input_file)+'\n'

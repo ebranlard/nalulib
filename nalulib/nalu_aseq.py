@@ -15,8 +15,8 @@ from nalulib.exodus_rotate import rotate_exodus
 
 
 
-def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
-        inlet_name='inlet', outlet_name='outlet', block_base='fluid'):
+def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
+        inlet_name='inlet', outlet_name='outlet', submit=False):
     myprint('Input YAML file', input_file)
     # Basename
     base_dir = os.path.dirname(input_file)
@@ -30,6 +30,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
             aseq = np.arange(aseq[0], aseq[1]+aseq[2]/2, aseq[2])
         else:
             pass
+    myprint('cluster     ', cluster)
     myprint('AoA sequence', aseq)
 
 
@@ -43,10 +44,11 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
         realm  = realms[1]
     else:
         realm  = realms[0]
-
-
     mesh_ori = realm['mesh']
     myprint('Mesh', mesh_ori)
+
+    # --- Check if the input file is valid
+    yml_ori.check(verbose=verbose)
 
     if aoa_ori is None:
         aoa_ori = extract_aoa(mesh_ori)
@@ -72,7 +74,7 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
     # --- Create YAML files
     nalu_files = [os.path.join(base_dir, base+'_aoa{:04.1f}.yaml'.format(alpha)) for alpha in aseq]
         
-    for alpha, nalu_file, mesh_file in zip(aseq, nalu_files, mesh_files):
+    for ia, (alpha, nalu_file, mesh_file) in enumerate(zip(aseq, nalu_files, mesh_files)):
         sAOA = '_aoa{:04.1f}'.format(alpha)
         # --- Change mesh
         mesh_rel = os.path.relpath(mesh_file, os.path.dirname(nalu_file))
@@ -99,16 +101,41 @@ def nalu_prepare_aseq(input_file, aseq=None, verbose=False, debug=False, batch_f
                     realm['sideset_writers'][j]['output_data_base_name'] =  outbase + sAOA + ext
 
         yml.save(nalu_file)
-        myprint('Written NALU File', nalu_file)
+        if ia in [0, len(aseq)-1]:
+            myprint('Written NALU File', nalu_file)
+        print('   ...') if ia==1 else None
+    print('----------------------------------------------------------------------------')
 
     # --- Create BATCH files
-    for alpha, nalu_file  in zip(aseq, nalu_files):
-        jobname_case = jobname + 'A{:04.1f}'.format(alpha)
-        new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case)
-        myprint('Written Batch File', new_batch, jobname_case)
+    if cluster == 'local':
+        base_dir = os.path.dirname(input_file)
+        base_name = os.path.basename(input_file)
+        base, ext = os.path.splitext(base_name)
+        run_batch_file = os.path.join(base_dir, 'submit-'+base+'.sh') 
+        with open(run_batch_file, 'w', encoding='utf-8') as f:
+            for nalu_file in nalu_files:
+                f.write('naluX -i {}\n'.format(nalu_file))
+        myprint('[INFO] Commands written to:', run_batch_file)
+    else:
+        batch_files = []
+        for ia, (alpha, nalu_file) in enumerate(zip(aseq, nalu_files)):
+            jobname_case = jobname + 'A{:04.1f}'.format(alpha)
+            new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1)
+            batch_files.append(new_batch)
+            if ia in [0, len(aseq)-1]:
+                myprint('Written Batch File', new_batch, jobname_case)
+            print('   ...') if ia==1 else None
+        print('----------------------------------------------------------------------------')
+
+        # --- Submit BATCH files
+        if submit:
+            cmd = 'sbatch'
+            print('[INFO] Submitting {} batch files using {}'.format(len(batch_files), cmd))
+            for batch_file in batch_files:
+                os.system(cmd + ' ' + batch_file)
 
 
-def nalu_aseq():
+def nalu_aseq_CLI():
     """
     Command-line entry point for preparing a Nalu-Wind aseq
     """
@@ -120,18 +147,18 @@ def nalu_aseq():
     parser.add_argument("-a", type=float, nargs=3, default=None, help="Alpha sequence (start, stop, step) (optional, default: -15 to 15 in steps of 3)")
     parser.add_argument("-b", "--batch_file", default=None, help="Batch file template (optional)")
     parser.add_argument("-j", "--jobname", default='', help="Jobname prefix (optional)")
-    parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel"], help="Cluster type")
+    parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel", "local"], help="Cluster type. If local, only one batch file is created.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--submit"     , action="store_true",  help="Submit generated batch file to cluster scheduler (`sbatch`).")
 
     parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
     parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
-    #parser.add_argument("--block-base", type=str, default="fluid", help="Base name for the block (default: 'fluid', alternative: 'Flow').")
 
     args = parser.parse_args() 
     if args.verbose:
         print('Arguments:', args)
 
-    nalu_prepare_aseq(
+    nalu_aseq(
         input_file=args.input_file,
         aseq=args.a,
 #        output_file=args.output_file,
@@ -141,7 +168,7 @@ def nalu_aseq():
         jobname=args.jobname,
         inlet_name=args.inlet_name,
         outlet_name=args.outlet_name,
-        #block_base=args.block_base,
+        submit=args.submit
     )
 
 if __name__ == "__main__":

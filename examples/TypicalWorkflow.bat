@@ -13,6 +13,8 @@ exo-rotate   diamond_n20.exo -a 30
 nalu-aseq input.yaml -a -30 30 10 -j polar -b submit.sh
 
 ::nalu-restart input.yaml -b submit.sh 
+echo "Generated files will be deleted"
+pause
 rm submit-input*.sh
 rm input_aoa*.yaml
 rm diamond_*.exo

@@ -339,7 +339,7 @@ def process_motion_list(motions):
 
 class NALUInputFile(YamlEditor):
 
-    def __init__(self, filename, reader='yaml', profiler=True):
+    def __init__(self, filename, reader='yaml', profiler=False):
         """ Initialize NALUInputFile with a YAML file path """
         super().__init__(filename=filename, reader=reader, profiler=profiler)
 
