@@ -392,12 +392,12 @@ class NALUInputFile(YamlEditor):
             Re  = rho*U0*1/nu/ 1e6
             time_dict = self.time_dict
             dt = time_dict['dt']
-            dt_rule_of_thumb = 0.02 * 1  / U0
-            s += f" * time      : {time_dict}  (dt_rec~{dt_rule_of_thumb:.4f} if chord=1)\n"
+            dt_rec = 0.02 * 1  / U0
+            s += f" * time      : {time_dict}  (dt_rec~{dt_rec:.4f} if chord=1)\n"
             s += f" * velocity  : {vel}\n"
             s += f" * density   : {rho}\n"
             s += f" * viscosity : {nu}  (nu)\n"
-            s += f" * Reynolds  ~ {Re:.1f}M (if chord=1)\n"
+            s += f" * Reynolds  ~ {Re:.2f}M (if chord=1)\n"
 
             s += "methods:\n"
             s += " - sort, extract_mesh_motion, check, print"
@@ -616,6 +616,13 @@ class NALUInputFile(YamlEditor):
                                 errors.append(f"Mesh motion part '{mp}' in realm {i} not found in exodus file (allowed: {names['blocks']}).")
 
 
+            # Check for time step consistency
+            vel = self.velocity
+            time_dict = self.time_dict
+            dt = time_dict['dt']
+            dt_rec = 0.02 * 1  / np.linalg.norm(vel)
+            if (np.abs(dt-dt_rec)/dt_rec) > 0.5:
+                errors.append(f"Time step dt={dt:.4f} is inconsistent with expected dt_rec={dt_rec:.4f} (if chord=1).")
 
 
         if errors:

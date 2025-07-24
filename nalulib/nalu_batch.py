@@ -25,7 +25,7 @@ def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, ver
             if '--job-name' in line:
                 # Replace the line with the new job name
                 lines[i] = "#SBATCH --job-name={}\n".format(jobname)
-            if '--mail-user=' in line:
+            if '--mail-=' in line:
                 if not mail:
                     lines[i] = '#' + line  # Comment the line
         if line.startswith('nalu_input'):

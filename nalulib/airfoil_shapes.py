@@ -126,6 +126,20 @@ class StandardizedAirfoilShape():
         #    return self._y
 
     @property
+    def s(self):
+        s = curve_coord(self._x, self._y, normalized=False)
+        return s
+
+    @property
+    def ds(self):
+        return np.diff(self.s)
+
+    @property
+    def ds_min(self):
+        return np.min(self.ds)
+
+
+    @property
     def chord(self):
         return np.max(self.x) - np.min(self.x)
 
@@ -144,6 +158,8 @@ class StandardizedAirfoilShape():
     @property
     def is_closed(self):
         return contour_is_closed(self.x, self.y, reltol=self.reltol)
+
+
 
     # --------------------------------------------------------------------------------
     # --- Geometry
@@ -270,6 +286,9 @@ class StandardizedAirfoilShape():
         s+='| > number of lower points: {:4d}\n'.format(len(self._ILower))
         s+='| > total number of points: {:4d}\n'.format(len(self.x))
 
+        ds = self.ds
+        s+='| * s             : {} \n'.format(self.s[-1])
+        s+='| * ds all        : min={:.4g}, max={:.4g}, mean={:.4g}\n'.format(np.min(ds), np.max(ds), np.mean(ds))
         # ds for upper+lower
         xul = np.concatenate([self._xu, self._xl[1:]])
         yul = np.concatenate([self._yu, self._yl[1:]])

@@ -7,7 +7,7 @@ from nalulib.exodus_airfoil_layers import extract_airfoil_geometry
 from nalulib.exodus_hex2quads import hex_to_quads_plane
 from nalulib.exodus_quads2hex import quads_to_hex
 from nalulib.exodus_rotate import rotate_exodus
-from nalulib.nalu_aseq import nalu_prepare_aseq
+from nalulib.nalu_aseq import nalu_aseq
 from nalulib.nalu_restart import nalu_prepare_restart
 
 def print_section(title, width=76, char='#'):
@@ -72,9 +72,9 @@ def main(cleanUp=False, verbose=False):
         keep_io_side_set=False, verbose=verbose, profiler=False)
 
     # ---  Create mesh, yaml, submit for polar
-    print_section('nalu_prepare_aseq')
+    print_section('nalu_aseq')
     print_command('nalu-aseq input.yaml -a -30 30 10 -j polar -b submit.sh # Create mesh, yaml, submit for polar')
-    nalu_prepare_aseq(input_file="input.yaml",
+    nalu_aseq(input_file="input.yaml",
         aseq= (-30, 30, 10),
         verbose=verbose, debug=False,
         batch_file="submit.sh", cluster="unity",
