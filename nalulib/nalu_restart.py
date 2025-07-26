@@ -6,7 +6,7 @@ import glob
 from nalulib.essentials import *
 from nalulib.nalu_input import NALUInputFile
 from nalulib.nalu_batch import nalu_batch
-from nalulib.exodus import exo_get_times
+from nalulib.exodus_core import exo_get_times
 
 def myprint(s1, s2, s3=None):
     if s3 is None:

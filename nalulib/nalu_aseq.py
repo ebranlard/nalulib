@@ -144,7 +144,7 @@ def nalu_aseq_CLI():
     parser.add_argument("input_file", default='input.yaml', nargs="?", help="Input YAML file")
 #    parser.add_argument("-o", "--output_file", default=None, help="Output YAML file (optional, default: input_runNRUN.yaml)")
     parser.add_argument("-a", type=float, nargs=3, default=None, help="Alpha sequence (start, stop, step) (optional, default: -15 to 15 in steps of 3)")
-    parser.add_argument("-c", "--center", type=float, nargs=2, default=(0.0, 0.0), help="Center of rotation (x, y). Default is (0.0, 0.0).")
+    parser.add_argument("-c", "--center", type=float, nargs=2, default=(0.25, 0.0), help="Center of rotation (x, y). Default is (0.25, 0.0).")
     parser.add_argument("-b", "--batch_file", default=None, help="Batch file template (optional)")
     parser.add_argument("--keep-io-side-set", action="store_true", help="Keep inlet and outlet side sets unchanged, otherwise, they are adapted.")
     parser.add_argument("-j", "--jobname", default='', help="Jobname prefix (optional)")

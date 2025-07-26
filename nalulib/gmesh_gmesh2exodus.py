@@ -280,5 +280,5 @@ if __name__ == "__main__":
     import sys
     # Grab the filename from the first system argument or use a default
     filename = sys.argv[1] if len(sys.argv) > 1 else "example.msh"
-    with Timer('Total conversion', silent=not args.profiler):
+    with Timer('Total conversion', silent=False):
         gmsh2exo(filename)

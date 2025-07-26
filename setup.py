@@ -10,11 +10,11 @@ setup(
     install_requires=requirements,
     entry_points={
         'console_scripts': [
-            'exo-info=nalulib.cli:exo_info',
-            'exo-flatten=nalulib.cli:exo_flatten',
-            'exo-zextrude=nalulib.cli:exo_zextrude',
+            'exo-info=nalulib.cli:exo_info_CLI',
+            'exo-flatten=nalulib.cli:exo_flatten_CLI',
+            'exo-zextrude=nalulib.cli:exo_zextrude_CLI',
             'exo-rotate=nalulib.cli:exo_rotate_CLI',
-            'exo-layers=nalulib.cli:exo_layers',
+            'exo-layers=nalulib.cli:exo_layers_CLI',
             'nalu-input=nalulib.cli:nalu_input_CLI',
             'nalu-restart=nalulib.cli:nalu_restart',
             'nalu-aseq=nalulib.cli:nalu_aseq_CLI',
