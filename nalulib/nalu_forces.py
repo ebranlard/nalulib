@@ -91,6 +91,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 dimensionless=True,
                 var='xy',
                 verbose=False,
+                plot=True
                 ):
 
     # --- Are we dealing with multiple files or one file?
@@ -134,15 +135,16 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 print('Final values: {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(FC, df['Cx'].values[-1], FC, df['Cy'].values[-1]))
 
             # --- Plot time series
-            fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,5.8))
-            fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
-            if 'x' in var:
-                plt.plot(df['Time'].values, df['Cx'].values, label=FC+'x')
-            if 'y' in var:
-                plt.plot(df['Time'].values, df['Cy'].values, label=FC+'y')
-            ax.set_ylabel(label)
-            ax.set_xlabel('Time [s]')
-            ax.legend()
+            if plot:
+                fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,5.8))
+                fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+                if 'x' in var:
+                    plt.plot(df['Time'].values, df['Cx'].values, label=FC+'x')
+                if 'y' in var:
+                    plt.plot(df['Time'].values, df['Cy'].values, label=FC+'y')
+                ax.set_ylabel(label)
+                ax.set_xlabel('Time [s]')
+                ax.legend()
 
     if polar_ref is None and len(input_files) == 1:
         # If no polar reference is provided, we only plot the time series
@@ -172,31 +174,32 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
     df.to_csv(polar_out, index=False)
 
     # --- Plot polar
-    fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
+    if plot:
+        fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
 
-    if polar_ref is not None and dimensionless:
-        print('[INFO] Ref polar   : ', polar_ref)
-        df_ref = CSVFile(polar_ref).toDataFrame()
-        df_ref = standardize_polar_df(df_ref)
-        plot_polar_df(axes, df_ref, sty='k-', label='ref')
-    if polar_exp is not None and dimensionless:
-        print('[INFO] Exp polar   : ', polar_exp)
-        df_exp = CSVFile(polar_exp).toDataFrame()
-        df_exp = standardize_polar_df(df_exp)
-        plot_polar_df(axes, df_exp, sty='ko', label='exp')
+        if polar_ref is not None and dimensionless:
+            print('[INFO] Ref polar   : ', polar_ref)
+            df_ref = CSVFile(polar_ref).toDataFrame()
+            df_ref = standardize_polar_df(df_ref)
+            plot_polar_df(axes, df_ref, sty='k-', label='ref')
+        if polar_exp is not None and dimensionless:
+            print('[INFO] Exp polar   : ', polar_exp)
+            df_exp = CSVFile(polar_exp).toDataFrame()
+            df_exp = standardize_polar_df(df_exp)
+            plot_polar_df(axes, df_exp, sty='ko', label='exp')
 
-    sty = 'ro' if len(df) == 1 else '-'
-    plot_polar_df(axes, df, sty=sty, label='cfd')
+        sty = 'ro' if len(df) == 1 else '-'
+        plot_polar_df(axes, df, sty=sty, label='cfd')
 
-    axes[0].set_xlabel('Angle of Attack (deg)')
-    axes[0].set_ylabel('Coefficient [-]')
-    axes[1].set_xlabel('Cd [-]')
-    axes[1].set_ylabel('Cl [-]')
-    axes[0].legend()
-    axes[1].legend()
-    axes[0].set_title('Cl and Cd vs Angle of Attack')
-    axes[0].grid(True)
-    axes[1].grid(True)
+        axes[0].set_xlabel('Angle of Attack (deg)')
+        axes[0].set_ylabel('Coefficient [-]')
+        axes[1].set_xlabel('Cd [-]')
+        axes[1].set_ylabel('Cl [-]')
+        axes[0].legend()
+        axes[1].legend()
+        axes[0].set_title('Cl and Cd vs Angle of Attack')
+        axes[0].grid(True)
+        axes[1].grid(True)
 
 
 def nalu_forces_CLI():
@@ -217,6 +220,7 @@ def nalu_forces_CLI():
     parser.add_argument('--forces', dest='dimensionless', action='store_false', help='Plot forces instead of coefficients')
     parser.add_argument('--var', type=str, default='xy', help='Which force components to plot (x, y, or xy)')
     parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('--no-plot', action='store_true', help='Do not plot results')
     args = parser.parse_args()
 
     plot_forces(
@@ -231,10 +235,12 @@ def nalu_forces_CLI():
         yaml_file=args.yaml,
         polar_ref=args.polar_ref,
         polar_exp=args.polar_exp,
+        polar_out=args.polar_out,
         auto=args.auto,
         dimensionless=args.dimensionless,
         var=args.var,
         verbose=args.verbose,
+        plot=not args.no_plot,
     )
     plt.show()
 

@@ -10,7 +10,7 @@ from nalulib.airfoillib import airfoil_get_xy, _DEFAULT_REL_TOL
 
 
 def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=True, respline=True, Re=1e6, 
-                 outputfile=None, format=None, output_format=None, verbose=False, plot=False, thick=True, 
+                 output_file=None, format=None, output_format=None, verbose=False, plot=False, thick=True, 
                  a_hyp=2.5, 
                  TE_type=None,
                  **kwargs):
@@ -32,13 +32,11 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
         arf.plot(title='Original')
 
     if respline and method != 'refine' and method != 'none':
-        print('[INFO] Performing respline before meshing. TE_type should be preserved.', arf._TE_TYPE)
+        print('[INFO] Performing respline before meshing. TE_type will be preserved:', arf._TE_TYPE)
         print('[TODO] Respline should not be equispacing')
         nx = len(arf.x)
         n_spline = int( 2.0 * arf.s[-1] / arf.ds_min)
         n_surf = int(n_spline/2)
-        print('>>> n_spline', n_spline)
-        print('>>> n_surf', n_surf)
         arf = arf.resample_spline(n_surf=n_surf, inplace=True)
         if plot:
             arf.plot(title='Resplined')
@@ -55,8 +53,8 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
     if verbose:
         print(arf)
 
-    if outputfile is not None:
-        arf.write(outputfile, format=output_format, verbose=verbose, thick=thick)
+    if output_file is not None:
+        arf.write(output_file, format=output_format, verbose=verbose, thick=thick)
 
     if plot:
         arf.plot(title='Remeshed')
@@ -121,7 +119,7 @@ def mesh_airfoil_CLI():
         thick=not args.no_thick,
         respline=args.respline,
         Re=args.Re,
-        outputfile=args.output,
+        output_file=args.output,
         format=args.format,
         output_format=args.output_format,
         verbose=args.verbose,

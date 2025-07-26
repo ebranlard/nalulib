@@ -7,7 +7,11 @@ from nalulib.weio.plot3d_file import read_plot3d
 from nalulib.airfoil_shapes_io import convert_airfoil
 
 
+_DEFAULT_NU= 1.46071e-5   # Kinematic viscosity
+_DEFAULT_YPLUS = 1        # Desired y+ value
+_DEFAULT_RE = None        # Reynolds number, if provided, will compute s0
 
+# WATCH OUT, never use this dicretly, always copy them first
 _DEFAULT_OPTIONS = {
     # ---    Input Parameters
     "fileType": "PLOT3D",
@@ -51,8 +55,7 @@ def pyhyp_run(options, output_file_fmt=None):
         hyp.writePlot3D(output_file_fmt);    
     return hyp # todo return coords & connectivity
 
-
-def get_s0(reynolds, yplus=1, nu=1.46071e-5):
+def get_s0(reynolds, yplus=_DEFAULT_YPLUS, nu=_DEFAULT_NU):
     """
     Compute the first layer height based on Reynolds number and desired y+ using a turbulent flat plate approximation
     """
@@ -63,9 +66,10 @@ def get_s0(reynolds, yplus=1, nu=1.46071e-5):
 
     return s0
 
-
-
 def pyhyp_write_pyscript(options, filename=None, output_file=None):
+    """ Write a Python script to run pyHyp with the given options 
+    This is mostly useful for running pyHyp in WSL from Windows.
+    """
     # use a temporary file if no filename is provided
     if filename is None:
         import tempfile
@@ -179,62 +183,38 @@ def pyhyp_run_WSL(options, output_file_fmt='output.fmt', input_file=None, verbos
         print('>>> Removed temporary script file:', script_file)    
 
 
-def pyhyp_cmdline_CLI():
 
-    parser = argparse.ArgumentParser(description="Run pyHyp with input and output files.")
-    parser.add_argument('-i', '--input', required=True, help='Input file path')
-    parser.add_argument('-o', '--output', required=False, help='Output file path', default='_OUTPUT.exo')
-    parser.add_argument('-n', '--N', type=int, help='Grid parameter N')
-    parser.add_argument('--re', type=float, default=None, help='For s0 - Reynolds number used to compute s0 if provided')
-    parser.add_argument("--nu", type=float, default=1.46071e-5, help='For s0 - Kinematic viscosity (nu). Only used if Re is provided')
-    parser.add_argument("--yplus", type=float, default=1, help='For s0 - Yplus value, only used if Re is provided')
-    parser.add_argument('--s0', type=float, help='Grid parameter s0 (not used if Re is provided)')
-    parser.add_argument('--marchDist', type=float, help='Grid parameter marchDist', default=_DEFAULT_OPTIONS['marchDist'])
-    parser.add_argument('--cMax', type=float, help='Pseudo grid parameter cMax', default=_DEFAULT_OPTIONS['cMax'])
-    parser.add_argument('--epsE', type=float, help='Smoothing parameter epsE', default=_DEFAULT_OPTIONS['epsE'])
-    parser.add_argument('--epsI', type=float, help='Smoothing parameter epsI', default=_DEFAULT_OPTIONS['epsI'])
-    parser.add_argument('--theta', type=float, help='Smoothing parameter theta', default=_DEFAULT_OPTIONS['theta'])
-    parser.add_argument('--volCoef', type=float, help='Smoothing parameter volCoef')
-    parser.add_argument('--volBlend', type=float, help='Smoothing parameter volBlend')
-    parser.add_argument('--volSmoothIter', type=int, help='Smoothing parameter volSmoothIter')
-    parser.add_argument("--no-zpos-check", action="store_true", help="Do not check and enforce the orientation of quads about Z axis (default: check).")
-    parser.add_argument("--no-cleanup", action="store_true", help="Do not delete intermediary files.")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
+def pyhyp(input_file, output_file, options=None,
+          re=_DEFAULT_RE, yplus=_DEFAULT_YPLUS, nu=_DEFAULT_NU,  # Substitutes for s0
+          no_zpos_check=False, no_cleanup=False, verbose=False, 
+          inlet_name='inlet', outlet_name='outlet', block_base='fluid',
+          **kwargs):
 
-    parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
-    parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
-    parser.add_argument("--block-base", type=str, default="fluid", help="Base name for the block (default: 'fluid', alternative: 'Flow').")
-
-    args = parser.parse_args()
-
-    # Prepare options dictionary
-    options = _DEFAULT_OPTIONS.copy()
-    if args.N is not None:
-        options['N'] = args.N
-    if args.re is not None:
-        s0 = get_s0(reynolds=args.re, yplus=args.yplus, nu=args.nu)
+    # --- Prepare options for pyhyp
+    if options is None:
+        options = _DEFAULT_OPTIONS.copy()
+    # Update options with kwargs, only if not None
+    #print('>>> kwargs:', kwargs.keys())
+    #print('>>> kwargs:', kwargs)
+    #print('>>> options:', options.keys())
+    for key, value in kwargs.items():
+        if key not in options:
+            raise Exception('[ERROR] Key "{}" not found in options, skipping'.format(key)) # Should be an exception
+        if value is not None:
+            options[key] = value
+    # Override s0 if reynolds is provided
+    if re is not None:
+        s0 = get_s0(reynolds=re, yplus=yplus, nu=nu)
         options['s0'] = float(s0) # we don't want np.float
-        print('S0 computed from Reynolds number as:', s0, '(Re={}, yplus={}, nu={})'.format(args.re, args.yplus, args.nu))
-    else:
-        if args.s0 is not None:
-            options['s0'] = args.s0
-
-    # Inline update of options from args
-    for key in [
-        'marchDist', 'ps0', 'pGridRatio', 'cMax', 'epsE', 'epsI', 'theta', 'volCoef', 'volBlend', 'volSmoothIter']:
-        val = getattr(args, key, None)
-        if val is not None:
-            options[key] = val
-
-    # Prepare data dictionary
-    verbose = args.verbose
+        print('S0 computed from Reynolds number as:', s0, '(Re={}, yplus={}, nu={})'.format(re, yplus, nu))
 
     if verbose:
         print('Arguments received:')
-        print(f"       Input file      : {args.input}")  
-        print(f"       Output file     : {args.output}")
+        print(f"       Input file      : {input_file}")  
+        print(f"       Output file     : {output_file}")
         print(f"       Grid parameter N: {options['N']}")
-        print(f"       reynolds        : {args.re}")
+        print(f"       reynolds        : {re}")
+        print('Main Pyhyp options:')
         print(f"       s0              : {options.get('s0')}")
         print(f"       marchDist       : {options.get('marchDist')}")
         print(f"       ps0             : {options.get('ps0')}")
@@ -246,22 +226,21 @@ def pyhyp_cmdline_CLI():
         print(f"       volCoef         : {options.get('volCoef')}")
         print(f"       volBlend        : {options.get('volBlend')}")
         print(f"       volSmoothIter   : {options.get('volSmoothIter')}")
-    
-    output_file_fmt = args.output+'_fmt'
-    output_file_exo = args.output
+
+    output_file_fmt = output_file+'_fmt'
+    output_file_exo = output_file
 
     # --- Convert airfoil if needed
     try:
-        coords, dims = read_plot3d(args.input)
+        coords, dims = read_plot3d(input_file)
         if not np.array_equal(dims[0][1:], [2, 1]):
-            raise ValueError(f"Unexpected dimensions for {args.input}: {dims}")
+            raise ValueError(f"Unexpected dimensions for {input_file}: {dims}")
         print('[ OK ] Input file is in PLOT3D format.')
-        input_file = args.input
         input_file_tmp = None
     except:
         print('[INFO] Input file is not in PLOT3D format, converting it')
-        input_file_tmp = args.input+'_temp.fmt'
-        convert_airfoil(args.input, input_file_tmp, out_format='plot3d', thick=True)
+        input_file_tmp = input_file+'_temp.fmt'
+        convert_airfoil(input_file, input_file_tmp, out_format='plot3d', thick=True)
         input_file = input_file_tmp
     options['inputFile'] = input_file
 
@@ -279,7 +258,7 @@ def pyhyp_cmdline_CLI():
     except ImportError:
         # See if we are on windows, if so, we'll call a function that writes a pyhyp script for wsl
         if sys.platform.startswith('win'):
-            pyhyp_run_WSL(options, output_file_fmt=output_file_fmt, verbose=args.verbose)
+            pyhyp_run_WSL(options, output_file_fmt=output_file_fmt, verbose=verbose)
         else:
             print("pyHyp is not installed. Please install it before running this script.")
             sys.exit(1) 
@@ -293,21 +272,21 @@ def pyhyp_cmdline_CLI():
             print('[INFO] Fmt file generated:', output_file_fmt)
     
     # --- Generate exodus file
-    check_zpos = not args.no_zpos_check
+    check_zpos = not no_zpos_check
 
     plt3d2exo(output_file_fmt, output_file_exo, flatten=True, check_zpos=check_zpos,
-        inlet_name=args.inlet_name,
-        outlet_name=args.outlet_name,
-        block_base=args.block_base,
-        final_print=False
-        )
+         inlet_name=inlet_name,
+         outlet_name=outlet_name,
+         block_base=block_base,
+         final_print=False
+         )
 
     if not os.path.exists(output_file_exo):
         raise Exception('>>> Output file not generated:', output_file_exo)
     print('[INFO] Exo file generated:', output_file_exo)
 
     # --- Cleanup
-    if not args.no_cleanup:
+    if not no_cleanup:
         if os.path.exists(output_file_fmt):
             os.remove(output_file_fmt)
             if verbose:
@@ -319,16 +298,41 @@ def pyhyp_cmdline_CLI():
     print(f"[INFO] s0 used: {options.get('s0')}")
 
 
+def pyhyp_CLI():
+    """ Command line interface for pyHyp wrapper. Variable names should match the pyhyp function arguments."""
+    parser = argparse.ArgumentParser(description="Run pyHyp with input and output files.")
+    parser.add_argument('-i', '--input_file', required=True, help='Input file path')
+    parser.add_argument('-o', '--output_file', required=False, help='Output file path', default='_OUTPUT.exo')
+    parser.add_argument('--re', type=float, default=_DEFAULT_RE, help='For s0 - Reynolds number used to compute s0 if provided')
+    parser.add_argument("--nu", type=float, default=_DEFAULT_NU, help='For s0 - Kinematic viscosity (nu). Only used if Re is provided')
+    parser.add_argument("--yplus", type=float, default=_DEFAULT_YPLUS, help='For s0 - Yplus value, only used if Re is provided')
+    # --- PyHyp Options
+    parser.add_argument('-n', '--N', type=int, help='Grid parameter N', default=_DEFAULT_OPTIONS['N'])
+    parser.add_argument('--s0', type=float, help='Grid parameter s0 (not used if Re is provided)', default=_DEFAULT_OPTIONS['s0'])
+    parser.add_argument('--marchDist', type=float, help='Grid parameter marchDist', default=_DEFAULT_OPTIONS['marchDist'])
+    parser.add_argument('--cMax', type=float, help='Pseudo grid parameter cMax', default=_DEFAULT_OPTIONS['cMax'])
+    parser.add_argument('--epsE', type=float, help='Smoothing parameter epsE', default=_DEFAULT_OPTIONS['epsE'])
+    parser.add_argument('--epsI', type=float, help='Smoothing parameter epsI', default=_DEFAULT_OPTIONS['epsI'])
+    parser.add_argument('--theta', type=float, help='Smoothing parameter theta', default=_DEFAULT_OPTIONS['theta'])
+    parser.add_argument('--volCoef', type=float, help='Smoothing parameter volCoef', default=_DEFAULT_OPTIONS['volCoef'])
+    parser.add_argument('--volBlend', type=float, help='Smoothing parameter volBlend', default=_DEFAULT_OPTIONS['volBlend'])
+    parser.add_argument('--volSmoothIter', type=int, help='Smoothing parameter volSmoothIter', default=_DEFAULT_OPTIONS['volSmoothIter'])
+    # --- Misc options
+    parser.add_argument("--no-zpos-check", action="store_true", help="Do not check and enforce the orientation of quads about Z axis (default: check).")
+    parser.add_argument("--no-cleanup", action="store_true", help="Do not delete intermediary files.")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
+    parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
+    parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
+    parser.add_argument("--block-base", type=str, default="fluid", help="Base name for the block (default: 'fluid', alternative: 'Flow').")
 
-
-
-
-
-
+    args = parser.parse_args()
+    kwargs = vars(args)
+    pyhyp(**kwargs)  # Unpack arguments into the function call
+    #args.input, args.output, options, verbose=args.verbose, re=args.re, N=args.N,  **args_dict2)
 
 
 if __name__ == "__main__":
-    pyhyp_cmdline_CLI()
+    pyhyp_CLI()
 
     #options = _DEFAULT_OPTIONS.copy()
     #options['inputFile'] = '../_examples_big/naca0012_euler.fmt'

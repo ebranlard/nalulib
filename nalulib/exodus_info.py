@@ -21,13 +21,13 @@ def exodus_get_names(filename, lower=False):
         face_var = exo.get_face_variable_names()
 
     names = {
-        "blocks": block_names,
-        "side_sets": side_set_names,
-        "global_variables": glob_var,
-        "element_variables": elem_var,
-        "node_variables": node_var,
-        "edge_variables": edge_var,
-        "face_variables": face_var
+      "blocks"            : block_names,
+      "side_sets"         : side_set_names,
+      "global_variables"  : glob_var,
+      "element_variables" : elem_var,
+      "node_variables"    : node_var,
+      "edge_variables"    : edge_var,
+      "face_variables"    : face_var,
     }
     if lower:
         # return lower cases names
@@ -52,13 +52,11 @@ def print_nodes(coords, node_ids=None, nn=None):
         nn = len(coords)    
     if node_ids is None:
         node_ids = range(1, nn + 1)
-
     for i, node_id in enumerate(node_ids[:nn]):
         print(f"Node ID: {node_id}, Coordinates: {coords[i]}")
 
 
-
-def explore_exodus_file(filename, n=5, nss=10):
+def exo_info(filename, n=5, nss=10):
     print(f"Filename:                 {filename}")
     with ExodusIIFile(filename, mode="r") as exo:
         warnings = explore_exodus(exo, n=n, nss=nss)
@@ -74,7 +72,6 @@ def explore_exodus_file(filename, n=5, nss=10):
 def explore_exodus(exo, n=5, nss=10):
     warnings=[]
     # Basic information
-    warnings=[]
     block_ids = exo.get_element_block_ids()
     block_info = exo.get_element_block(block_ids[0])
     side_set_ids = exo.get_side_set_ids()
@@ -199,7 +196,7 @@ def explore_exodus(exo, n=5, nss=10):
     return warnings
 
 
-def exo_info():
+def exo_info_CLI():
     import argparse
     parser = argparse.ArgumentParser(description="Explore the contents of an Exodus file.")
     parser.add_argument("filename", type=str, help="Path to the Exodus file to explore.")
@@ -207,7 +204,7 @@ def exo_info():
     parser.add_argument("-nss", type=int, default=10, help="Number of side sets to display.")
     args = parser.parse_args()
 
-    explore_exodus_file(args.filename, n=args.n, nss=args.nss)
+    exo_info(args.filename, n=args.n, nss=args.nss)
 
 
 if __name__ == "__main__":

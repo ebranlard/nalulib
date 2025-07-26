@@ -11,7 +11,7 @@ from nalulib.exodusii.file import ExodusIIFile
 SIDE_SETS_EXCLUDE=['front', 'back','wing-pp']
 
 
-def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0, verbose=True, airfoil2wing=True, ss_wing_pp=True, profiler=False, ss_suffix=None):
+def exo_zextrude(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0, verbose=True, airfoil2wing=True, ss_wing_pp=True, profiler=False, ss_suffix=None):
     """
     Extrude a 2D QUAD mesh into a 3D HEX mesh along the z direction.
 
@@ -234,7 +234,7 @@ def quads_to_hex(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
     return output_file
 
 
-def exo_quads2hex():
+def exo_zextrude_CLI():
     """
     Command-line interface for converting a 2D QUAD mesh into a 3D HEX mesh.
     """
@@ -254,7 +254,7 @@ def exo_quads2hex():
     args = parser.parse_args()
 
     with Timer('quads_to_hex', silent = not args.profiler):
-        quads_to_hex(
+        exo_zextrude(
             input_file=args.input_file,
             output_file=args.output_file,
             nSpan=args.n,
@@ -267,10 +267,8 @@ def exo_quads2hex():
             profiler = args.profiler
         )
 
-exo_zextrude = exo_quads2hex
-
 if __name__ == "__main__":
-    exo_quads2hex()
+    exo_zextrude_CLI()
 
     #input_file = sys.argv[1]
     #nSpan = 121

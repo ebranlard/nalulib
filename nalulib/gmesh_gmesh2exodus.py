@@ -41,7 +41,7 @@ from nalulib.exodusii.file import ExodusIIFile
 #]
 #
 
-def gmesh_to_exo(input_file, output_file=None, verbose=False, profiler=False, debug=False):
+def gmsh2exo(input_file, output_file=None, verbose=False, profiler=False, debug=False):
     """
     Convert a 3D GMSH mesh file to Exodus II format.
     
@@ -260,7 +260,7 @@ def gmesh_to_exo(input_file, output_file=None, verbose=False, profiler=False, de
     print(f"Written exo file: {output_file}")
 
 
-def gmsh2exo():
+def gmsh2exo_CLI():
     """
     Command-line interface to convert a 3D GMSH mesh file to Exodus II format.
     """
@@ -273,7 +273,7 @@ def gmsh2exo():
 
     args = parser.parse_args()
 
-    gmesh_to_exo(args.input_file, args.output_file, verbose=args.verbose)
+    gmsh2exo(args.input_file, args.output_file, verbose=args.verbose)
 
 
 if __name__ == "__main__":

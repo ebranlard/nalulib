@@ -5,7 +5,7 @@ import os
 # 
 from nalulib.essentials import Timer
 from nalulib.exodusii.file import ExodusIIFile
-from nalulib.exodus_hex2quads import hex_to_quads_plane  # Import the function to convert HEX to QUADS
+from nalulib.exodus_hex2quads import exo_flatten  # Import the function to convert HEX to QUADS
 from nalulib.meshlib import create_quadrilateral_cells
 from nalulib.gmesh import save_mesh, open_mesh_in_gmsh
 from nalulib.exodus_core import QUAD_SIDES
@@ -150,7 +150,7 @@ def find_next_layer(current_layer_elem_ids, current_layer_elem_sides, elem_to_si
     return next_layer_elem_ids, next_layer_elem_sides
 
 
-def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefix='', verbose=True, write_airfoil=False, plot=False, gmsh_write=False, gmsh_open=False, write_layers=False, write_fig=False, profiler=False, check=True):
+def exo_layers(input_file, side_set_name, num_layers, output_prefix='', verbose=True, write_airfoil=False, plot=False, gmsh_write=False, gmsh_open=False, write_layers=False, write_fig=False, profiler=False, check=True):
     """
     Extract airfoil geometry and surrounding layers from an Exodus file.
 
@@ -187,7 +187,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
         #if verbose:
         print('------------------------------ HEX2QUADS -----------------------------------')
         output_file = basefilename + "_quads_tmp.exo"
-        input_file = hex_to_quads_plane(input_file, output_file=output_file, z_ref=None, verbose=verbose)
+        input_file = exo_flatten(input_file, output_file=output_file, z_ref=None, verbose=verbose)
         #if verbose:
         print('----------------------------------------------------------------------------')
         print( 'Opening Exodus file      :', input_file)
@@ -370,7 +370,7 @@ def extract_airfoil_geometry(input_file, side_set_name, num_layers, output_prefi
             print(f"[WARN] Error deleting file {output_file} (nc bug?)")
 
 
-def exo_layers():
+def exo_layers_CLI():
     """
     Command-line interface for extracting airfoil geometry and surrounding layers from an Exodus file.
     """
@@ -388,7 +388,7 @@ def exo_layers():
     parser.add_argument("--no-check", action="store_true", help="Disable mesh consistency checks.")
     args = parser.parse_args()
 
-    extract_airfoil_geometry(
+    exo_layers(
         input_file=args.input_file,
         side_set_name=args.side_set_name,
         num_layers=args.num_layers,

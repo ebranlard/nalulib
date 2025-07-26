@@ -234,6 +234,14 @@ def negative_quads(conn, coords, ioff, full_coverage_check=False, plot=False, ol
 
 
 # --------------------------------------------------------------------------
+# --- Misc
+# --------------------------------------------------------------------------
+def exo_get_times(filename):
+    with ExodusIIFile(filename, mode="r") as exo:
+        times = exo.get_times()
+    return times
+
+# --------------------------------------------------------------------------
 # --- Side sets
 # --------------------------------------------------------------------------
 def check_exodus_side_sets_exist(exo, side_set_names):

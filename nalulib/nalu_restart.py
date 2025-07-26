@@ -14,7 +14,7 @@ def myprint(s1, s2, s3=None):
     else:
         print('{:30s}: '.format(s1) + '{:20s}'.format(str(s2))+' -> '+'{:20s}'.format(str(s3)) )
 
-def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, debug=False, nt_max_tol=10, nrun=None, batch_file=None, cluster='unity'):
+def nalu_restart(yaml_file, it=None, output_file=None, verbose=False, debug=False, nt_max_tol=10, nrun=None, batch_file=None, cluster='unity'):
     myprint('Input YAML file', yaml_file)
 
     yml = NALUInputFile(yaml_file, reader='ruamel') # NOTE: using ruamel to keep comments
@@ -193,7 +193,7 @@ def nalu_prepare_restart(yaml_file, it=None, output_file=None, verbose=False, de
 
 
 
-def nalu_restart():
+def nalu_restart_CLI():
     """
     Command-line entry point for preparing a Nalu-Wind restart YAML and batch file.
     """
@@ -212,7 +212,7 @@ def nalu_restart():
     if args.verbose:
         print('Arguments:', args)
 
-    nalu_prepare_restart(
+    nalu_restart(
         yaml_file=args.yaml_file,
         it=args.it,
         output_file=args.output_file,
@@ -224,6 +224,6 @@ def nalu_restart():
     )
 
 if __name__ == "__main__":
-    nalu_restart()
+    nalu_restart_CLI()
     #test_yaml = "input.yaml"
     #nalu_prepare_restart(test_yaml, it=None, output_file=None, batch_file=None, cluster='unity', nrun=None)

@@ -203,7 +203,7 @@ def reindex_quads(quads, old_node_coords, side_sets, z_ref, verbose=False, profi
             new_side_sets[new_id+1] = side_set_data
     return quads, nodes_coords, new_side_sets
 
-def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, profiler=False, check_zpos=True):
+def exo_flatten(input_file, output_file=None, z_ref=None, verbose=True, profiler=False, check_zpos=True):
     """
     Extract a plane of HEX elements at a specific Z value, convert to QUADs, and export to a new Exodus file.
 
@@ -238,7 +238,7 @@ def hex_to_quads_plane(input_file, output_file=None, z_ref=None, verbose=True, p
     return output_file
 
 
-def exo_hex2quads():
+def exo_flatten_CLI():
     """
     Command-line interface for extracting a plane of HEX elements at a specific Z value, converting to QUADs, and exporting to a new Exodus file.
     """
@@ -256,7 +256,7 @@ def exo_hex2quads():
     args = parser.parse_args()
 
     with Timer('hex_to_quads', silent = not args.profiler):
-        hex_to_quads_plane(
+        exo_flatten(
             input_file=args.input_file,
             output_file=args.output,
             z_ref=args.z,
@@ -265,11 +265,9 @@ def exo_hex2quads():
             profiler=args.profiler
         )
 
-# Rename function
-exo_flatten = exo_hex2quads
 
 if __name__ == "__main__":
-    exo_hex2quads()
+    exo_flatten_CLI
 
     #input_file =  "ffa_w3_211_aoa32.exo"
     #output_file = None
