@@ -1,11 +1,12 @@
 import os
+from tabnanny import verbose
 import numpy as np
 import pandas as pd
 import argparse
 
 import nalulib.pyplot as plt # wrap matplotlib
 from nalulib.essentials import *
-from nalulib.weio.csv_file import CSVFile
+from nalulib.weio.csv_file import CSVFile, find_non_numeric_header_lines, WrongFormatError
 from nalulib.weio.plot3d_file import Plot3DFile, read_plot3d, write_plot3d
 
 
@@ -36,7 +37,7 @@ EXT_TO_FORMAT = {
 # --------------------------------------------------------------------------------{
 # --- Main wrappers
 # --------------------------------------------------------------------------------}
-def read_airfoil(filename, format=None, **kwargs):
+def read_airfoil(filename, format=None, verbose=False, **kwargs):
     """ Read airfoil coordinates from a filename"""
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File {filename} does not exist.") 
@@ -44,6 +45,8 @@ def read_airfoil(filename, format=None, **kwargs):
         ext = os.path.splitext(filename)[1].lower().strip('.')
         format = EXT_TO_FORMAT[ext]
     format = format.lower()
+    if verbose:
+        print(f"Reading airfoil from {filename} with format {format}")
 
     if format in ['csv','tab']:
         x, y, d = read_airfoil_csv(filename)
@@ -53,6 +56,13 @@ def read_airfoil(filename, format=None, **kwargs):
         x, y, d = read_airfoil_pointwise(filename, plot=False)
     else:
         raise  NotImplementedError(f"File type {ext} is not supported.")
+
+    
+    if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+        print('First values of x:',x[0:5], x.dtype)
+        print('First values of y:',y[0:5], y.dtype)
+        raise ValueError("Ffile must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
+
     return x, y, d
 
 def write_airfoil(x, y, filename, format=None, **kwargs):
@@ -132,8 +142,68 @@ def convert_airfoil(input_file, output_file=None, out_format=None, verbose=False
 # --------------------------------------------------------------------------------}
 # --- CSV 
 # --------------------------------------------------------------------------------{
+def has_two_ints_on_second_line_and_third_empty(filename):
+    """
+    See for instance e850.dat
+
+    Returns True if the second line of the file contains exactly two floats that can be coerced to integers,
+    and the third line is empty (only whitespace or newline).
+    """
+    with open(filename, 'r', encoding='utf-8', errors='surrogateescape') as f:
+        lines = []
+        for _ in range(3):
+            line = f.readline()
+            if not line: break
+            lines.append(line.rstrip('\n\r'))
+
+    if len(lines) < 3: return False
+
+    # Check second line
+    parts = lines[1].strip().replace(',', ' ').split()
+    if len(parts) != 2: return False
+    try:
+        floats = [float(p) for p in parts]
+        ints   = [int(f) for f in floats]
+        if not all(abs(f-i)<1e-8 for f,i in zip(floats,ints)):
+            return False
+    except Exception:
+        return False
+
+    # Check third line is empty
+    if lines[2].strip() != '':
+        return False
+
+    return True
+
 def read_airfoil_csv(filename):
-    csv = CSVFile(filename)
+    # --- Find non-numeric header lines
+    header_indices, header_lines = find_non_numeric_header_lines(filename)
+
+    # We expect mostly 0 or one line of header. If more than one header line is found, it's best if lines start with a '#'
+    if len(header_indices)> 1:
+        print("[INFO] Found more than one header line in file ", filename)
+    #    # count lines that do not start with "#"
+    #    not_comment_lines = [line for line in header_lines if not line.startswith('#')]
+    #    nNotComment = len(not_comment_lines)
+    #    print("[INFO] Found non-comment header lines:", not_comment_lines)
+    #    #if nNotComment > 0:
+    #    #    raise Exception("Error: More than one header line found in the file. Please ensure the file has a single header line, no header lines at all, or that all header lines start with `#`.")
+
+
+    if has_two_ints_on_second_line_and_third_empty(filename):
+        raise Exception('File format with separate Upper and Lower surfaces not yet supported, file {}.'.format(filename))
+
+    #print('>>>> commentLines:', header_indices, 'header_lines:', header_lines)
+    #csv = CSVFile(filename=filename, commentLines=header_indices, detectColumnNames=False, colNames=['x', 'y'], doRead=False)
+    csv = CSVFile(filename=filename, commentLines=header_indices, doRead=False) #, detectColumnNames=False, colNames=['x', 'y'], doRead=False)
+    try:
+        csv._read()
+    except WrongFormatError as e:
+        print("[FAIL] {}".format(str(e).strip()))
+        print("       > Trying to read the file with a slower method...")
+        #print(csv)
+        csv.read_slow_stop_at_first_empty_lines(numeric_only=True)
+
     df = csv.toDataFrame()
     #import pandas as pd
     #df = pd.read_csv(filename)
@@ -143,6 +213,17 @@ def read_airfoil_csv(filename):
         y = df.iloc[:, 1].values
     else:
         raise ValueError("CSV file must have exactly two columns for x and y coordinates.")
+    # Check if numpy array are all floats, otherwise( e.g. if they are objects) raise an exception
+    if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+        if x[-1] == 'ZZ':
+            print('[WARN] File {} Last value of x is "ZZ", removing it and converting to float.'.format(filename))
+            x=x[:-1].astype(float)
+            y=y[:-1]
+        else:
+            print(csv)
+            print('First values of x:',x[0:5], x.dtype)
+            print('First values of y:',y[0:5], y.dtype)
+            raise ValueError("CSV file must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
     d={}
     return x, y, d
 
@@ -307,24 +388,27 @@ def write_airfoil_plot3d(x, y, filename, thick=False):
         dims = (len(x), 1, 1)  # Assuming a single slice in the z-direction
     write_plot3d(filename, coords, dims)
 
-def airfoil_plot(input_file, standardize=False, verbose=False):
+def airfoil_plot(input_file, standardize=False, verbose=False, simple=False):
     from nalulib.airfoillib import standardize_airfoil_coords
     from nalulib.airfoillib import plot_airfoil
-    print('Reading: ', input_file)
-    x, y, d = read_airfoil(input_file)
+    if verbose:
+        print('Reading: ', input_file)
+    x, y, d = read_airfoil(input_file, verbose=verbose)
     if standardize:
         print("Standardizing airfoil coordinates: looping, anticlockwise, starting from upper TE.")
         x, y = standardize_airfoil_coords(x, y, verbose=verbose)
-    plot_airfoil(x, y)
+    plot_airfoil(x, y, verbose=verbose, simple=simple)
     plt.show()
 
 def airfoil_plot_CLI():
     parser = argparse.ArgumentParser(description="Plot airfoil files for any supported formats (csv, plot3d, pointwise, geo, etc).")
     parser.add_argument(      'input', type=str, help='Input airfoil file path')
     parser.add_argument(      '--std' , action='store_true', help='Standardize the format so the coordinates are: looped, anticlockwise, and starting from the upper TE.')
+    parser.add_argument(      '--simple', action='store_true', help='Plot the airfoil without trying to split surface if standardized.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output.')
     args = parser.parse_args()
-    airfoil_plot(args.input, standardize=args.std)
-    
+    airfoil_plot(args.input, standardize=args.std, verbose=args.verbose, simple=args.simple)
+
 
 def convert_airfoil_CLI():
 

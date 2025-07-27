@@ -10,6 +10,29 @@ from nalulib.airfoil_shapes_naca import naca_shape
 # --------------------------------------------------------------------------------{
 class TestAirfoilShape(unittest.TestCase):
 
+    def test_problematic_airfoils(self):
+        # 
+        info = []
+        info += [('../data/airfoils/tests/naca6412.dat', 'blunt', [60,61, 62, 0])] # Blunt inclined like this: / 
+        info += [('../data/airfoils/blunt_not_straight.csv'         , 'blunt' , np.concatenate((np.arange(499,524), [0])))] # Inclined like this: /
+        info += [('../data/airfoils/tests/du91-w2-225_nalu_l40.csv' , 'sharp' , np.array([40  , 0]))] # Sharp blunt like this: =>
+
+        #info += [('../data/airfoils/tests/ag04.dat', 'sharp', [90, 0])] # TODO TODO
+
+        #info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
+        #info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
+        #info += [('../data/airfoils/tests/goe795sm.dat', 'sharp', [90, 0])]
+
+        for fpath, TE_type, ITE in info:
+            fullpath = os.path.join(scriptDir, fpath)
+            #print(f"------ {fullpath} - TE_type: {TE_type} - ITE: {ITE}")
+            arf = StandardizedAirfoilShape(filename =fullpath)
+            #arf.plot()
+            self.assertEqual(arf._TE_TYPE, TE_type)
+            np.testing.assert_equal(arf._ITE, ITE)
+
+
+
     def test_manip_sharp(self):
         # Manipulations for a sharp trailing edge airfoil
         #P=Polar(os.path.join(MyDir,'../data/Cylinder.dat'))
@@ -90,4 +113,7 @@ class TestAirfoilShape(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    #TestAirfoilShape().test_problematic_airfoils()
     unittest.main()
+    #import matplotlib.pyplot as plt
+    #plt.show()

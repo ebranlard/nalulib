@@ -62,9 +62,16 @@ class StandardizedAirfoilShape():
     The class stores the origianl starting point, orientation, and closed status of the airfoil.
     The class can output in a different convention as the internal representation (TODO)
     """
-    def __init__(self, x, y, name='', reltol=_DEFAULT_REL_TOL, verbose=False, TE_type=None):
-        # Store original info
+    def __init__(self, x=None, y=None, filename=None, format=None, name='', reltol=_DEFAULT_REL_TOL, verbose=False, TE_type=None):
 
+        if filename is not None:
+            if x is not None or y is not None:
+                raise Exception("Cannot provide both filename and coordinates.")
+            x, y, _ = read_airfoil(filename, format=format)
+        if x is None or y is None:
+            raise ValueError("x and y coordinates must be provided or a filename must be specified.")
+
+        # Store original info
         self._ori_standardized = airfoil_is_standardized(x, y, raiseError=False)
         self._ori_start_point = (x[0], y[0])
         self._ori_orientation = contour_orientation(x, y)
@@ -698,44 +705,49 @@ def debug_slope():
     ax.legend()
     plt.show()
 
-if __name__ == '__main__':
-    from welib.airfoils.naca import naca_shape
 
-    digits='0022'
-    n=5
-    x, y = naca_shape(digits, chord=1, n=n)
-    print('x',x)
-    print('y',y)
+def airfoil_info(input_file, name='', TE_type=None, plot=False, verbose=False):
+    """ 
+    Read an airfoil file and return a StandardizedAirfoilShape object.
+    """
+    x, y, _ = read_airfoil(input_file, verbose=verbose, TE_type=TE_type)
 
-    arf = AirfoilShape(x=x, y=y, name='Naca'+digits)
-    print('x',arf.x)
-    print('y',arf.y)
-    arf.write('_Naca{}.csv'.format(digits), format='csv', delim=' ')
-    #arf.plot(digits)
-    arf.plot_surfaces()
+    arf = StandardizedAirfoilShape(x, y, name=name or input_file, verbose=verbose)
+    if verbose:
+        print(arf)
 
-    plt.show()
-
+    if plot:
+        arf.plot()
+        plt.show()
+    return arf
 
 def airfoil_info_CLI():
     parser = argparse.ArgumentParser(description="Show info about an airfoil file using StandardizedAirfoilShape.")
-    parser.add_argument('input', type=str, help='Input airfoil file path')
-    parser.add_argument('--plot', action='store_true', help='Plot the airfoil shape')
-    parser.add_argument('--name', type=str, default='', help='Optional name for the airfoil')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('input_file', type=str, help='Input airfoil file path')
+    parser.add_argument('-p', '--plot', action='store_true', help='Plot the airfoil shape')
+    parser.add_argument(      '--name', type=str, default='', help='Optional name for the airfoil')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     args = parser.parse_args()
 
-    x, y, _ = read_airfoil(args.input)
+    airfoil_info(**vars(args))
 
-    arf = StandardizedAirfoilShape(x, y, name=args.name or args.input, verbose=args.verbose)
-
-    print(arf)
-
-    if args.plot:
-        arf.plot()
-        plt.show()
 
 if __name__ == '__main__':
+    from welib.airfoils.naca import naca_shape
 
     airfoil_info_CLI()
 
+    #digits='0022'
+    #n=5
+    #x, y = naca_shape(digits, chord=1, n=n)
+    #print('x',x)
+    #print('y',y)
+
+    #arf = AirfoilShape(x=x, y=y, name='Naca'+digits)
+    #print('x',arf.x)
+    #print('y',arf.y)
+    #arf.write('_Naca{}.csv'.format(digits), format='csv', delim=' ')
+    ##arf.plot(digits)
+    #arf.plot_surfaces()
+
+    #plt.show()

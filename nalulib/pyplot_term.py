@@ -12,7 +12,10 @@ MARKERS=['dot', 'cross', '+', 'fhd', 'braille', 'sd']
 COLORS=['blue', 'orange', 'green', 'red', 'gray','magenta', 'cyan']
 
 def get_plotext_default_size():
-    size = os.get_terminal_size()
+    try:
+        size = os.get_terminal_size()
+    except OSError:
+        size = (80, 24)  # Default size if terminal size cannot be determined
     width = size.columns - 10
     height = int(size.lines * 0.7)
     height100 = int(size.lines)

@@ -34,6 +34,49 @@ class TestAirfoilShapesIO(unittest.TestCase):
         np.testing.assert_almost_equal(x[-3], 1.0)
         np.testing.assert_array_almost_equal(y[-3:], [-3.7000000e-04, 2.8500000e-04,9.4000000e-04])
 
+
+    def test_read_problematic1(self):
+        # Header line is NACA 6412, which confuses the CSV reader and data end up object
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/naca6412.dat'), format='csv')
+        if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+            raise ValueError("File must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
+        self.assertEqual(len(x), 62)
+        self.assertEqual(x[0], 1.00025)
+        self.assertEqual(x[-1], 1.00)
+
+    def test_read_problematic2(self):
+        # File S1221.dat has two dataset in it separated with empty lines...
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/s1221.dat'), format='csv')
+        if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+            raise ValueError("File must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
+        self.assertEqual(len(x), 72)
+        self.assertEqual(x[0], 1.00182)
+        self.assertEqual(x[-1], 1.00181)
+
+    def test_read_problematic3(self):
+        # File goe187.dat triggers a UnicodeDecodeError due to a charmap code
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/goe187.dat'), format='csv')
+        self.assertEqual(len(x), 33)
+        self.assertEqual(x[-1], 1.0)
+
+    def test_read_problematic4(self):
+        # File goe795sm.dat has "ZZ" at the end of the file
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/goe795sm.dat'), format='csv')
+        self.assertEqual(len(x), 69)
+        self.assertEqual(x[-1], 1.0)
+
+    def test_read_problematic5(self):
+        # File e850.dat has multiple datasets
+        # expect the following to raise an exception
+        # because the file format is not supported
+        with self.assertRaises(Exception):
+            x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/e850.dat'), format='csv')
+        print('TODO library not ready for e850.dat')
+        #print(x)
+        #self.assertEqual(len(x), 69)
+        #self.assertEqual(x[-1], 1.0)
+
+
     def test_convert_airfoil_csv_to_plot3d_and_back(self):
         input_file = os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.csv')
         temp_fmt = os.path.join(scriptDir, '_test_convert.fmt')
@@ -95,4 +138,8 @@ class TestAirfoilShapesIO(unittest.TestCase):
         cleanup_files([temp_pwise, temp_csv])
 
 if __name__ == "__main__":
+    #TestAirfoilShapesIO().test_read_problematic3()
+    #TestAirfoilShapesIO().test_read_problematic4()
+    #TestAirfoilShapesIO().test_read_problematic5()
+    #TestAirfoilShapesIO().test_read_problematic6()
     unittest.main()

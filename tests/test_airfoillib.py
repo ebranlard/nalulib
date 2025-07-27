@@ -88,6 +88,7 @@ class TestAirfoilLib(unittest.TestCase):
             x, y = airfoil_get_xy(*args, **kwargs)
             x_new, y_new = standardize_airfoil_coords(x, y)
             _,_,ITE,_ = airfoil_split_surfaces(x_new, y_new, method=method)
+            #plot_airfoil(x_new,y_new)
             np.testing.assert_array_equal(ITE, expected)
 
         for method in ['xmax', 'angle']:
@@ -96,8 +97,33 @@ class TestAirfoilLib(unittest.TestCase):
             test('naca0012', expected=[300, 0], method=method, sharp=True)
             test(os.path.join(scriptDir, '../data/airfoils/S809.csv'), expected=[65, 0], method=method)
             test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=[199, 200, 201, 0], method=method)
+            test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.csv'), expected=[199, 200, 0], method=method)
+
         method = 'angle'
         test(os.path.join(scriptDir, '../data/airfoils/blunt_not_straight.csv'), expected=np.concatenate((np.arange(499,524), [0])), method=method)
+
+
+    def test_problematic1(self):
+        # File fx79w470a.dat has clearly a wrong point on line 3
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/fx79w470a.dat'), format='csv')
+        x_new, y_new = standardize_airfoil_coords(x, y)
+        # The following line should raise an exception because the data is wrong
+        with self.assertRaises(Exception):
+            IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x_new, y_new)
+        #plot_airfoil(x_new,y_new, simple=True)
+
+
+    def test_problematic2(self):
+        # File du91-w2-225_l40.csv, display a sharp trailing edge but with large angles... 
+        # Most likely the data is wrong, but we still assume this has to be a sharp TE
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/du91-w2-225_nalu_l40.csv'), format='csv')
+        x_new, y_new = standardize_airfoil_coords(x, y)
+        TE_type = airfoil_TE_type(x, y)
+        _, _, ITE, _ = airfoil_split_surfaces(x_new, y_new)
+        #plot_airfoil(x_new,y_new)
+        self.assertEqual(TE_type, 'sharp')
+        np.testing.assert_equal(ITE, [40, 0])
+
 
     def test_te_type(self):
         def test(*args, method='xmax', expected='sharp', **kwargs):
@@ -118,4 +144,8 @@ class TestAirfoilLib(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    #TestAirfoilLib().test_ITE()
+    #TestAirfoilLib().test_problematic1()
+    #TestAirfoilLib().test_problematic2()
     unittest.main()
+    #plt.show()

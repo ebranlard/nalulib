@@ -125,6 +125,9 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     # At the end, close the contour
     x, y = close_contour(x, y, force=True, verbose=False)
 
+    # Find TE indices for sanity check
+    #ITE = find_TE_indices(x, y, TE_type=None, raiseError=False, method='angle')
+
     return x, y
 
 def airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True):
@@ -192,15 +195,11 @@ def find_te_indices_by_xmax(x):
     ITE = np.concatenate((IXmax[1:], [IXmax[0]]))
     return ITE
 
-def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=_DEFAULT_ITE_METHOD, TE_type=None):
-    """
-    Split an airfoil contour into upper and lower surfaces, and find leading edge (LE) and trailing edge (TE) indices.
-    This assumes that the contour is closed and counterclockwise.
 
-    If TE_type is provided, the method will use it to determine the TE indices.
-    """
+def find_TE_indices(x, y, TE_type=None, raiseError=True, method="angle"):
+    """ Tries to find TE indices for closed coutnerclockwise airofoil"""
     # Ensure contour is open and counterclockwise
-    if not contour_is_closed(x, y, reltol=reltol):
+    if not contour_is_closed(x, y):
         raise Exception("Airfoil contour should be closed, but it is not. Use close_contour() to close it.")
     if not contour_is_counterclockwise(x, y):
         raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
@@ -219,8 +218,9 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=
         #    method = 'angle'
             pass
         else:
-            raise ValueError(f"TE type '{TE_type}' is not supported. Use 'sharp' or 'blunt'.")
-    
+            if raiseError:
+                raise ValueError(f"TE type '{TE_type}' is not supported. Use 'sharp' or 'blunt'.")
+
     # --- TE indices
     if ITE is None:
         if method=='xmax':
@@ -271,22 +271,43 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=
         else:
             raise NotImplementedError(f"Method '{method}' is not implemented for finding TE indices.")
 
-    assert ITE[-1] == 0, "Last TE index should be 0, but got {}".format(ITE[-1])
-    assert ITE[-2] == len(x)-1, "Second last TE index should be the last point, but got {}".format(ITE[-2])
-    # assert that ITE, when sorted, form a contiuous set (without the 0)
-    assert np.all(np.diff(ITE[:-1]) == 1), "ITE indices are not continuous."
+    if raiseError:
+        assert ITE[-1] == 0, "Last TE index should be 0, but got {}".format(ITE[-1])
+        assert ITE[-2] == len(x)-1, "Second last TE index should be the last point, but got {}".format(ITE[-2])
+        # assert that ITE, when sorted, form a contiuous set (without the 0)
+        assert np.all(np.diff(ITE[:-1]) == 1), "ITE indices are not continuous."
 
     # --- Perform checks again if user specified TE type
     if TE_type is not None:
         if TE_type == 'sharp':
             if len(ITE) !=2:
-                raise Exception("User specified TE type as 'sharp' but the detection algorithm disagrees, len(ITE) != 2: {}.".format(len(ITE)))
+                if raiseError:
+                    raise Exception("User specified TE type as 'sharp' but the detection algorithm disagrees, len(ITE) != 2: {}.".format(len(ITE)))
         elif TE_type == 'blunt':
             if len(ITE) < 3:
-                raise Exception("User specified TE type as 'blunt' but the detection algorithm disagrees, len(ITE) < 3: {}.".format(len(ITE)))
+                if raiseError:
+                    raise Exception("User specified TE type as 'blunt' but the detection algorithm disagrees, len(ITE) < 3: {}.".format(len(ITE)))
         else:
-            raise ValueError(f"TE type '{TE_type}' is not supported. Use 'sharp' or 'blunt'.")
+            if raiseError:
+                raise ValueError(f"TE type '{TE_type}' is not supported. Use 'sharp' or 'blunt'.")
+    return ITE
 
+
+def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=_DEFAULT_ITE_METHOD, TE_type=None):
+    """
+    Split an airfoil contour into upper and lower surfaces, and find leading edge (LE) and trailing edge (TE) indices.
+    This assumes that the contour is closed and counterclockwise.
+
+    If TE_type is provided, the method will use it to determine the TE indices.
+    """
+    # Ensure contour is open and counterclockwise
+    if not contour_is_closed(x, y, reltol=reltol):
+        raise Exception("Airfoil contour should be closed, but it is not. Use close_contour() to close it.")
+    if not contour_is_counterclockwise(x, y):
+        raise Exception("Airfoil contour should be counterclockwise, but it is not. Use counterclockwise_contour() to fix it.")     
+
+    # --- Find TE point
+    ITE = find_TE_indices(x, y, TE_type=TE_type, raiseError=True, method=method)
 
     # --- Find LE point
     IXmin = np.where(x == np.min(x))[0]
@@ -807,6 +828,17 @@ def check_airfoil_mesh(x, y, IUpper, ILower, ITE, Re=1e6):
 # ---------------------------------------------------------------------------
 # --- Plot  Airfoil library
 # ---------------------------------------------------------------------------
+def arrow_from_0_passing_1(x, y, L=0.1):
+    dx = x[1] - x[0]
+    dy = y[1] - y[0]
+    norm = np.sqrt(dx**2 + dy**2)
+    if norm == 0:
+        return 0, 0
+    dxL = dx / norm * L
+    dyL = dy / norm * L
+    return dxL, dyL
+
+
 def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=None, simple=False, sty='k.-', TE_type=None):
     """ Plot airfoil coordinates if standardized using airfoil_standardize_coords()."""
     airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
@@ -822,6 +854,19 @@ def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=No
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(12.8,4.0)) # (6.4,4.8)
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
 
+
+    if orient and not simple:
+        c = np.max(x) - np.min(x)  # Chord length
+        L = 0.05*c  
+        dxL, dyL = arrow_from_0_passing_1(x, y, L=L)
+        scale=0.02 * c
+        ax.arrow(x[0], y[0], dxL, dyL, head_width=scale, head_length=scale, fc=(0.2,0.2,0.2), ec=(0.2,0.2,0.2))
+        #ax.arrow(x[0], y[0], dxL, dyL, fc=(0.2,0.2,0.2), ec='gray')
+        # scale=10 * np.sqrt(dx**2 + dy**2) 
+        # dx = x[1] - x[0]
+        # dy = y[1] - y[0]
+        # ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc=(0.2,0.2,0.2), ec='gray')
+
     # Main plot
     ax.plot(x, y, sty, label=label, ms=5)
 
@@ -835,13 +880,6 @@ def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=No
     if first and not simple:
         ax.plot(x[0], y[0], 's', label='First point', markerfacecolor='none', markersize=10)
 
-    if orient and not simple:
-        c = np.max(x) - np.min(x)  # Chord length
-        scale=0.01 * c
-        dx = x[1] - x[0]
-        dy = y[1] - y[0]
-        ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc='black', ec='black')
-
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.legend()
@@ -849,23 +887,38 @@ def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=No
     ax.set_title(title + f' n={len(x)} {TE_type} TE')
     return ax
 
-def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True):
+def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True, verbose=False, simple=False):
     """
     Simple airfoil plotting function.
     Highlights only the first point, last point, and orientation (arrow from first to second point).
     Does not attempt to detect TE/LE or surface types.
     """
     standardized = airfoil_is_standardized(x, y, raiseError=False)
-    if standardized:
+    if standardized and (not simple):
+        if verbose:
+            print("[INFO] Coordinates are standardized, using plot_standardized.")
         return plot_standardized(x, y, label=label, title=title, sty=sty, ax=ax)
-
+    else:
+        print("[INFO] Coordinates are not standardized.")
     orientation = contour_orientation(x, y)
 
-    import matplotlib.pyplot as plt
     x = np.asarray(x)
     y = np.asarray(y)
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+
+    if orient:
+        c = np.max(x) - np.min(x)  # Chord length
+        L = 0.05*c  
+        dxL, dyL = arrow_from_0_passing_1(x, y, L=L)
+        scale=0.02 * c
+        ax.arrow(x[0], y[0], dxL, dyL, head_width=scale, head_length=scale, fc=(0.2,0.2,0.2), ec=(0.2,0.2,0.2))
+        #ax.arrow(x[0], y[0], dxL, dyL, fc=(0.2,0.2,0.2), ec='gray')
+        # scale=10 * np.sqrt(dx**2 + dy**2) 
+        # dx = x[1] - x[0]
+        # dy = y[1] - y[0]
+        # ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc=(0.2,0.2,0.2), ec='gray')
+
     # Main plot
     ax.plot(x, y, sty, label=label, ms=5)
     # Highlight first point
@@ -873,12 +926,6 @@ def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True):
     # Highlight last point
     ax.plot(x[-1], y[-1], 'ro', label='Last point', markersize=8, markerfacecolor='none')
     # Orientation arrow (from first to second point)
-    if orient:
-        dx = (x[1] - x[0])*3
-        dy = (y[1] - y[0])*3
-        c = np.max(x) - np.min(x)
-        scale = 0.03 * c
-        ax.arrow(x[0], y[0], dx, dy, head_width=scale, head_length=scale, fc='black', ec='black')
 
     ax.set_xlabel('x')
     ax.set_ylabel('y')

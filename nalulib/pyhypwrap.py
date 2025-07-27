@@ -207,6 +207,10 @@ def pyhyp(input_file, output_file, options=None,
         s0 = get_s0(reynolds=re, yplus=yplus, nu=nu)
         options['s0'] = float(s0) # we don't want np.float
         print('S0 computed from Reynolds number as:', s0, '(Re={}, yplus={}, nu={})'.format(re, yplus, nu))
+    
+    # --- Sanitization of inputs where pyhyp is picky
+    options['s0'] = float(options['s0'])
+    options['marchDist'] = float(options['marchDist'])
 
     if verbose:
         print('Arguments received:')
