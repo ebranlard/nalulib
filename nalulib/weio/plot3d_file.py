@@ -21,7 +21,7 @@ class Plot3DFile(File):
     ------------
     - read, write, toDataFrame, keys
 
-    Examples
+    Examplesy
     --------
         f = Plot3DFile('file.fmt')
         print(f.keys())

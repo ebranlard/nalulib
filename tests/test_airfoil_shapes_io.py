@@ -138,6 +138,7 @@ class TestAirfoilShapesIO(unittest.TestCase):
         cleanup_files([temp_pwise, temp_csv])
 
 if __name__ == "__main__":
+    #TestAirfoilShapesIO().test_read_problematic2()
     #TestAirfoilShapesIO().test_read_problematic3()
     #TestAirfoilShapesIO().test_read_problematic4()
     #TestAirfoilShapesIO().test_read_problematic5()
