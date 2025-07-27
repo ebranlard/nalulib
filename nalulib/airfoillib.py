@@ -102,31 +102,94 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     x = np.asarray(x)
     y = np.asarray(y)
 
+    ori_is_closed = contour_is_closed(x, y, reltol=reltol)
     # Printing info to screen
     if verbose:
-        print('[INFO] input airfoil is closed:           ', contour_is_closed(x, y, reltol=reltol))
+        print('[INFO] input airfoil is closed:           ', ori_is_closed)
         print('[INFO] input airfoil is counterclockwise: ', contour_is_counterclockwise(x, y))
+
+    # --- Basic finding of Upper TE point if TE is blunt oriented like this: \ based on the first and last point
+    #x_tmp, y_tmp = close_contour(x, y, force=True, verbose=False)
+    #PUpperTE = None
+    #ITE = find_TE_indices(x_tmp, y_tmp, TE_type=None, raiseError=False, method='angle')
+    # x, y = close_contour(x, y, force=True, verbose=False)
+    # x_max = np.max(x)
+    # if not ori_is_closed: 
+    #     # It's likely a blunt airfoil
+    #     chord = x_max - np.min(x)
+    #     dx = np.abs(x[0] - x[-1])
+    #     if ((x[0] == x_max) or (x[-1] == x_max)) and (x[0] != x[-1]) and dx< 0.001 * chord:
+    #         # NOTE: this won't work if many points are along the blunt TE, so it's just a hack.
+    #         # Alternative:
+    #         #           ITE = find_TE_indices(x, y, TE_type=None, raiseError=False, method='angle')
+    #         # Case 1:       Case 2:    OtherCases:
+    #         #    0            -1              i
+    #         #     \             \            /
+    #         #     -1             0          j
+    #         #
+    #         if (x[-1] == x_max) and y[-1]<y[0]: #  Case 1
+    #             PUpperTE = (x[0], y[0]) 
+    #             print('[INFO] Detected TE \ with upper TE point at the first point (x[0], y[0])')
+    #         elif (x[0] == x_max) and y[0]<y[-1]: # Case 2
+    #             PUpperTE = (x[-1], y[-1])
+    #             print('[INFO] Detected TE \ with upper TE point at the last point (x[-1], y[-1])')
+    #         # Othercases will be handled below
 
     # At first remove last point if same as the first point
     x, y = open_contour(x, y, reltol=reltol, verbose=False)
 
     # Remove duplicates
-    x, y, duplicates = contour_remove_duplicates(x, y, reltol=reltol, verbose=verbose)
+    x, y, duplicates = contour_remove_duplicates(x, y, reltol=reltol, verbose=True)
 
     # Ensure counterclockwise order
     x, y = counterclockwise_contour(x, y, verbose=verbose)
 
-    # reloop so that first point is upper TE point
+
+    # --- First reloop from max(x), as an approximation
     IXmax = np.where(x == np.max(x))[0]
     iiymax = np.argmax(y[IXmax])
     iUpperTE = IXmax[iiymax]
     x, y = reloop_contour(x, y, iUpperTE, verbose=verbose)
 
+    # --- Find Upper TE  
+    x_tmp, y_tmp = close_contour(x, y, force=True, verbose=False)
+    PUpperTE = None
+    ITE = find_TE_indices(x_tmp, y_tmp, TE_type=None, raiseError=False, method='angle')
+    if len(ITE) == 2:
+            print('[INFO] Detected TE shape > (sharp)')
+    elif len(ITE) > 2:
+        # blunt TE
+        iiymax = np.argmax(y_tmp[ITE])
+        xte_min = np.min(x_tmp[ITE])
+        xte_max = np.max(x_tmp[ITE])
+        PUpperTE = (x_tmp[ITE[iiymax]], y_tmp[ITE[iiymax]])
+        if xte_min == xte_max:
+            print('[INFO] Detected TE shape | (blunt)')
+        elif PUpperTE[0]==xte_min:
+            print('[INFO] Detected TE shape \ (blunt)')
+        elif PUpperTE[0]==xte_max:
+            print('[INFO] Detected TE shape / (blunt)')
+        else:
+            print(x_tmp[ITE])
+            print(y_tmp[ITE])
+            print('Upper TE detected as:', PUpperTE)
+            raise Exception('[INFO] Unknown  TE shape ??? (blunt)')
+    else:
+        raise Exception('[INFO] Unknown TE shape ??? (sharp)')
+
+    # reloop so that first point is upper TE point
+    if PUpperTE is None:
+        IXmax = np.where(x == np.max(x))[0]
+        iiymax = np.argmax(y[IXmax])
+        iUpperTE = IXmax[iiymax]
+    else:
+        # find the closest point to PUpperTE
+        xF, yF, iUpperTE = find_closest(x, y, PUpperTE)
+        assert xF == PUpperTE[0] and yF == PUpperTE[1], "[ERROR] PUpperTE point not found in the contour. Check the coordinates."
+    x, y = reloop_contour(x, y, iUpperTE, verbose=verbose)
+
     # At the end, close the contour
     x, y = close_contour(x, y, force=True, verbose=False)
-
-    # Find TE indices for sanity check
-    #ITE = find_TE_indices(x, y, TE_type=None, raiseError=False, method='angle')
 
     return x, y
 
@@ -157,15 +220,15 @@ def airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseE
             print("[airfoillib] Contour is not counterclockwise.")
 
     # First point is upper TE (max x, max y among max x)
-    IXmax = np.where(x == np.max(x))[0]
-    iiymax = np.argmax(y[IXmax])
-    iUpperTE = IXmax[iiymax]
-    checks.append(iUpperTE == 0)
-    if not checks[-1]:
-        if raiseError:
-            raise Exception(f"First point is not upper TE (index {iUpperTE}).")
-        if verbose:
-            print(f"[airfoillib] First point is not upper TE (index {iUpperTE}).")
+    #IXmax = np.where(x == np.max(x))[0]
+    #iiymax = np.argmax(y[IXmax])
+    #iUpperTE = IXmax[iiymax]
+    #checks.append(iUpperTE == 0)
+    #if not checks[-1]:
+    #    if raiseError:
+    #        raise Exception(f"First point is not upper TE (index {iUpperTE}).")
+    #    if verbose:
+    #        print(f"[airfoillib] First point is not upper TE (index {iUpperTE}).")
 
     return all(checks)
 
@@ -239,32 +302,34 @@ def find_TE_indices(x, y, TE_type=None, raiseError=True, method="angle"):
                 print('[WARN] Only one TE candidates found by angle method, reverting to Xmax method.')
                 ITE = ITE_XMAX
                 # TODO: do something if user specificed TE type as blunt
-                #import pdb; pdb.set_trace()
                 #raise ValueError("One TE candidates found by angle method.")
             elif len(ILarge) == 2:
                 # Sharp TE: first and last point
                 ITE = np.array([len(x)-1, 0])
                 # TODO: do something if user specificed TE type as blunt
             elif len(ILarge) > 2:
-                # Blunt TE: use two points with largest angles
-                iiymin = np.argmin(y[ILarge])
-                iiymax = np.argmax(y[ILarge])
-                te1 = ILarge[iiymin]
-                te2 = ILarge[iiymax]
-                # Assign lower/upper TE by y value
-                if y[te1] < y[te2]:
-                    lower_te, upper_te = te1, te2
+                if not raiseError:
+                    ITE = ILarge
                 else:
-                    lower_te, upper_te = te2, te1
-                # Collect all indices from lower_te to upper_te (counterclockwise)
-                if lower_te < upper_te:
-                    ITE = np.arange(lower_te, upper_te+1)
-                else:
-                    # Wrap around
-                    ITE = np.concatenate((np.arange(lower_te, len(x)), np.arange(0, upper_te+1)))
-                # Ensure upper TE is 0 if possible
-                if upper_te != 0:
-                    ITE = np.roll(ITE, -np.where(ITE==0)[0][0])
+                    # Blunt TE: use two points with largest angles
+                    iiymin = np.argmin(y[ILarge])
+                    iiymax = np.argmax(y[ILarge])
+                    te1 = ILarge[iiymin]
+                    te2 = ILarge[iiymax]
+                    # Assign lower/upper TE by y value
+                    if y[te1] < y[te2]:
+                        lower_te, upper_te = te1, te2
+                    else:
+                        lower_te, upper_te = te2, te1
+                    # Collect all indices from lower_te to upper_te (counterclockwise)
+                    if lower_te < upper_te:
+                        ITE = np.arange(lower_te, upper_te+1)
+                    else:
+                        # Wrap around
+                        ITE = np.concatenate((np.arange(lower_te, len(x)), np.arange(0, upper_te+1)))
+                    # Ensure upper TE is 0 if possible
+                    if upper_te != 0:
+                        ITE = np.roll(ITE, -np.where(ITE==0)[0][0])
                 #print('ITE',ITE)
             else:
                 raise ValueError("Unexpected number of TE candidates found by angle method.")

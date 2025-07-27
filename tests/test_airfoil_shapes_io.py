@@ -45,13 +45,15 @@ class TestAirfoilShapesIO(unittest.TestCase):
         self.assertEqual(x[-1], 1.00)
 
     def test_read_problematic2(self):
-        # File S1221.dat has two dataset in it separated with empty lines...
-        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/s1221.dat'), format='csv')
-        if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
-            raise ValueError("File must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
-        self.assertEqual(len(x), 72)
-        self.assertEqual(x[0], 1.00182)
-        self.assertEqual(x[-1], 1.00181)
+        # File as5045.dat has "https://" on the last line..
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/as5045.dat'), format='csv')
+        self.assertEqual(len(x), 81)
+        self.assertEqual(x[-1], 1.0)
+
+        # File goe795sm.dat has "ZZ" at the end of the file
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/goe795sm.dat'), format='csv')
+        self.assertEqual(len(x), 69)
+        self.assertEqual(x[-1], 1.0)
 
     def test_read_problematic3(self):
         # File goe187.dat triggers a UnicodeDecodeError due to a charmap code
@@ -60,10 +62,10 @@ class TestAirfoilShapesIO(unittest.TestCase):
         self.assertEqual(x[-1], 1.0)
 
     def test_read_problematic4(self):
-        # File goe795sm.dat has "ZZ" at the end of the file
-        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/goe795sm.dat'), format='csv')
-        self.assertEqual(len(x), 69)
-        self.assertEqual(x[-1], 1.0)
+        # File ste87151.dat
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/ste87151.dat'), format='csv')
+        self.assertEqual(len(x), 60)
+        #self.assertEqual(x[-1], 1.0)
 
     def test_read_problematic5(self):
         # File e850.dat has multiple datasets
@@ -75,6 +77,15 @@ class TestAirfoilShapesIO(unittest.TestCase):
         #print(x)
         #self.assertEqual(len(x), 69)
         #self.assertEqual(x[-1], 1.0)
+
+    def test_read_problematic6(self):
+        # File S1221.dat has two dataset in it separated with empty lines...
+        x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/s1221.dat'), format='csv')
+        if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+            raise ValueError("File must contain floating point numbers in both columns. Maybe the header was not detected correctly?")
+        self.assertEqual(len(x), 72)
+        self.assertEqual(x[0], 1.00182)
+        self.assertEqual(x[-1], 1.00181)
 
 
     def test_convert_airfoil_csv_to_plot3d_and_back(self):
@@ -138,7 +149,7 @@ class TestAirfoilShapesIO(unittest.TestCase):
         cleanup_files([temp_pwise, temp_csv])
 
 if __name__ == "__main__":
-    #TestAirfoilShapesIO().test_read_problematic2()
+    TestAirfoilShapesIO().test_read_problematic2()
     #TestAirfoilShapesIO().test_read_problematic3()
     #TestAirfoilShapesIO().test_read_problematic4()
     #TestAirfoilShapesIO().test_read_problematic5()

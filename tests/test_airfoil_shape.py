@@ -17,7 +17,9 @@ class TestAirfoilShape(unittest.TestCase):
         info += [('../data/airfoils/blunt_not_straight.csv'         , 'blunt' , np.concatenate((np.arange(499,524), [0])))] # Inclined like this: /
         info += [('../data/airfoils/tests/du91-w2-225_nalu_l40.csv' , 'sharp' , np.array([40  , 0]))] # Sharp blunt like this: =>
 
-        #info += [('../data/airfoils/tests/ag04.dat', 'sharp', [90, 0])] # TODO TODO
+        info += [('../data/airfoils/tests/ag04.dat', 'blunt', [179, 180, 0])] #  TE is like this: \
+        info += [('../data/airfoils/tests/sd7034.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
+        info += [('../data/airfoils/tests/ste87151.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
 
         #info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
         #info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
@@ -29,7 +31,7 @@ class TestAirfoilShape(unittest.TestCase):
             arf = StandardizedAirfoilShape(filename =fullpath)
             #arf.plot()
             self.assertEqual(arf._TE_TYPE, TE_type)
-            np.testing.assert_equal(arf._ITE, ITE)
+            np.testing.assert_array_equal(arf._ITE, ITE)
 
 
 
@@ -113,7 +115,7 @@ class TestAirfoilShape(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    #TestAirfoilShape().test_problematic_airfoils()
-    unittest.main()
+    TestAirfoilShape().test_problematic_airfoils()
+    #unittest.main()
     #import matplotlib.pyplot as plt
-    #plt.show()
+    plt.show()

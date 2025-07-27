@@ -118,11 +118,20 @@ class TestAirfoilLib(unittest.TestCase):
         # Most likely the data is wrong, but we still assume this has to be a sharp TE
         x, y, d = read_airfoil(os.path.join(scriptDir, '../data/airfoils/tests/du91-w2-225_nalu_l40.csv'), format='csv')
         x_new, y_new = standardize_airfoil_coords(x, y)
-        TE_type = airfoil_TE_type(x, y)
+        TE_type = airfoil_TE_type(x_new, y_new)
         _, _, ITE, _ = airfoil_split_surfaces(x_new, y_new)
         #plot_airfoil(x_new,y_new)
         self.assertEqual(TE_type, 'sharp')
         np.testing.assert_equal(ITE, [40, 0])
+
+    def test_problematic3(self):
+        x, y, d = read_airfoil(os.path.join(scriptDir,'../data/airfoils/tests/ste87151.dat' ), format='csv')
+        x_new, y_new = standardize_airfoil_coords(x, y)
+        TE_type = airfoil_TE_type(x_new, y_new)
+        _, _, ITE, _ = airfoil_split_surfaces(x_new, y_new)
+        #plot_airfoil(x_new,y_new)
+        self.assertEqual(TE_type, 'sharp')
+        np.testing.assert_equal(ITE, [60, 0])
 
 
     def test_te_type(self):
@@ -147,5 +156,6 @@ if __name__ == '__main__':
     #TestAirfoilLib().test_ITE()
     #TestAirfoilLib().test_problematic1()
     #TestAirfoilLib().test_problematic2()
+    #TestAirfoilLib().test_problematic3()
     unittest.main()
     #plt.show()

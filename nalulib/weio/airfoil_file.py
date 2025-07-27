@@ -342,6 +342,16 @@ def is_OpenFAST_airfoil_shape(filename):
             if not line: break
     return False
 
+def find_non_float_indices(arr):
+    """Return indices of elements in arr that cannot be converted to float."""
+    arr = np.asarray(arr)
+    indices = []
+    for i, v in enumerate(arr):
+        try:
+            float(v)
+        except Exception:
+            indices.append(i)
+    return indices
 
 def read_airfoil_csv_like(filename):
 
@@ -388,10 +398,12 @@ def read_airfoil_csv_like(filename):
         raise BrokenFormatError("CSV file must have exactly two columns for x and y coordinates.")
     # Check if numpy array are all floats, otherwise( e.g. if they are objects) raise an exception
     if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
-        if x[-1] == 'ZZ':
-            print('[WARN] File {} Last value of x is "ZZ", removing it and converting to float.'.format(filename))
+        # We allow the last value to be non float..
+        IO = find_non_float_indices(x)
+        if len(IO) ==1 and IO[0] == len(x)-1:
+            print('[WARN] File {} Last value of x is nonfloat, removing it and converting to float.'.format(filename))
             x=x[:-1].astype(float)
-            y=y[:-1]
+            y=y[:-1].astype(float)
         else:
             print(csv)
             print('First values of x:',x[0:5], x.dtype)
