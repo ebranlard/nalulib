@@ -158,17 +158,19 @@ def exo_zextrude(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
                 "sides": list(map(int,extruded_sides)),
                 "name": side_set_data["name"],
             }
+        side_set_id_used = list(new_side_sets.keys())
 
         tmp_side_set_names = [str(v['name']) for v in new_side_sets.values()]
         if ss_wing_pp and ('wing' in tmp_side_set_names):
             if verbose:
                 print('Adding wing_pp side set.')
             # Add the "wing_pp" side set
-            new_side_sets[len(new_side_sets) + 1] = {
+            new_side_sets[max(side_set_id_used) + 1] = {
                 "elements": wing_pp_elements,
                 "sides": wing_pp_sides,
                 "name": "wing-pp",
             }
+        side_set_id_used = list(new_side_sets.keys())
 
         # Add front and back side sets
         front_elements = []
@@ -186,12 +188,12 @@ def exo_zextrude(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
             front_sides.append(6)  # Side index for the top face of HEX8
 
         # Add to new_side_sets
-        new_side_sets[len(new_side_sets) + 1] = {
+        new_side_sets[max(side_set_id_used) + 1] = {
             "elements": back_elements,
             "sides": back_sides,
             "name": "back"+ss_suffix,
         }
-        new_side_sets[len(new_side_sets) + 1] = {
+        new_side_sets[max(side_set_id_used) + 2] = {
             "elements": front_elements,
             "sides": front_sides,
             "name": "front"+ss_suffix,

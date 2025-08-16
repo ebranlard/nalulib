@@ -65,7 +65,7 @@ def _cuboid_hex_sidesets(nx, ny, nz, legacy=False):
         back_elems = np.array([1 + i + j*nElemX for i in range(nElemX) for j in reversed(range(nElemY))], dtype=int)
     else:
         back_elems = np.array([1 + i + j*nElemX for i in range(nElemX) for j in range(nElemY)], dtype=int)
-    back_sides = np.ones_like(back_elems) * (5 if legacy else 6)
+    back_sides = np.ones_like(back_elems) * 5
 
     # Front (z=lz): k=nElemZ-1
     k = nElemZ-1
@@ -73,7 +73,7 @@ def _cuboid_hex_sidesets(nx, ny, nz, legacy=False):
         front_elems = np.array([1 + i + j*nElemX + k*nxy for i in range(nElemX) for j in reversed(range(nElemY))], dtype=int)
     else:
         front_elems = np.array([1 + i + j*nElemX + k*nxy for i in range(nElemX) for j in range(nElemY)], dtype=int)
-    front_sides = np.ones_like(front_elems) * (6 if legacy else 5)
+    front_sides = np.ones_like(front_elems) * 6
 
     # Bottom (y=-ly/2): j=ny-2 (legacy) or j=0 (else)
     j = ny-2 if legacy else 0
@@ -101,14 +101,24 @@ def _cuboid_hex_sidesets(nx, ny, nz, legacy=False):
         outlet_elems = np.array([1 + i + j*nElemX + k*nxy for j in range(nElemY) for k in range(nElemZ)], dtype=int)
     outlet_sides = np.ones_like(outlet_elems) * (4 if legacy else 2)
 
-    return {
-        6: {"elements": back_elems,   "sides": back_sides,   "name": "back_bg"},    # z=0
-        4: {"elements": bottom_elems, "sides": bottom_sides, "name": "bottom_bg"},  # y=-ly/2
-        5: {"elements": front_elems,  "sides": front_sides,  "name": "front_bg"},   # z=lz
-        1: {"elements": inlet_elems,  "sides": inlet_sides,  "name": "inlet_bg"},   # x=-lx/2
-        2: {"elements": outlet_elems, "sides": outlet_sides, "name": "outlet_bg"},  # x=+lx/2
-        3: {"elements": top_elems,    "sides": top_sides,    "name": "top_bg"},     # y=+ly/2
-    }
+    if legacy:
+        return {
+            6: {"elements": back_elems,   "sides": back_sides,   "name": "back_bg"},    # z=0
+            4: {"elements": bottom_elems, "sides": bottom_sides, "name": "bottom_bg"},  # y=-ly/2
+            5: {"elements": front_elems,  "sides": front_sides,  "name": "front_bg"},   # z=lz
+            1: {"elements": inlet_elems,  "sides": inlet_sides,  "name": "inlet_bg"},   # x=-lx/2
+            2: {"elements": outlet_elems, "sides": outlet_sides, "name": "outlet_bg"},  # x=+lx/2
+            3: {"elements": top_elems,    "sides": top_sides,    "name": "top_bg"},     # y=+ly/2
+        }
+    else:
+        return {
+            1: {"elements": bottom_elems, "sides": bottom_sides, "name": "bottom_bg"},  # y=-ly/2
+            2: {"elements": inlet_elems,  "sides": inlet_sides,  "name": "inlet_bg"},   # x=-lx/2
+            3: {"elements": outlet_elems, "sides": outlet_sides, "name": "outlet_bg"},  # x=+lx/2
+            4: {"elements": top_elems,    "sides": top_sides,    "name": "top_bg"},     # y=+ly/2
+            5: {"elements": back_elems,   "sides": back_sides,   "name": "back_bg"},    # z=0
+            6: {"elements": front_elems,  "sides": front_sides,  "name": "front_bg"},   # z=lz
+        }
 
 def exo_cuboid(filename, ls, ns, center_origin=True, block_name='background-HEX', verbose=False, legacy=True):
     """ Creates a regular cuboid mesh and writes it to an Exodus file."""

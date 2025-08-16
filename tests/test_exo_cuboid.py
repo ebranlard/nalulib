@@ -40,11 +40,11 @@ class TestExodusCuboid(unittest.TestCase):
         np.testing.assert_allclose(conn[0],  [1, 2, 6, 5, 13, 14, 18, 17])
         np.testing.assert_allclose(conn[-1], [19, 20, 24, 23, 31, 32, 36, 35])
         # Check sidesets: shape, range, and a few IDs
-        ssinfo = sidesets[6] # back_bg
+        ssinfo = sidesets[5] # back_bg
         np.testing.assert_equal(ssinfo["name"], "back_bg")
         np.testing.assert_allclose(ssinfo["elements"], [1, 4, 2, 5, 3, 6])
-        np.testing.assert_allclose(ssinfo["sides"][0], 6)
-        ssinfo = sidesets[2] # outlet_bg
+        np.testing.assert_allclose(ssinfo["sides"][0], 5)
+        ssinfo = sidesets[3] # outlet_bg
         np.testing.assert_equal(ssinfo["name"], "outlet_bg")
         np.testing.assert_allclose(ssinfo["elements"], [3, 9, 6, 12])
         np.testing.assert_allclose(ssinfo["sides"][0], 2)
