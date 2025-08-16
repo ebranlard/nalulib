@@ -26,6 +26,29 @@ class TestExodusCuboid(unittest.TestCase):
         np.testing.assert_allclose(ssinfo["elements"], [4, 10, 1, 7])
         np.testing.assert_allclose(ssinfo["sides"][0], 4)
 
+    def test_cuboid(self):
+        ls = (2.0, 3.0, 4.0)
+        ns = (4, 3, 3)
+        coords, conn, sidesets = exo_cuboid(filename=None, ls=ls, ns=ns, center_origin=True, legacy=False)
+        # Check nodes shape and a few node values
+        self.assertEqual(coords.shape, (4*3*3, 3))
+        np.testing.assert_allclose(coords[0], [-1.0, -1.5, 0.0])
+        np.testing.assert_allclose(coords[-1], [1.0,  1.5, 4.0])
+        # Check connectivity shape and a few values
+        self.assertEqual(conn.shape, (3*2*2, 8))
+        self.assertTrue(np.all(conn >= 1))
+        np.testing.assert_allclose(conn[0],  [1, 2, 6, 5, 13, 14, 18, 17])
+        np.testing.assert_allclose(conn[-1], [19, 20, 24, 23, 31, 32, 36, 35])
+        # Check sidesets: shape, range, and a few IDs
+        ssinfo = sidesets[6] # back_bg
+        np.testing.assert_equal(ssinfo["name"], "back_bg")
+        np.testing.assert_allclose(ssinfo["elements"], [1, 4, 2, 5, 3, 6])
+        np.testing.assert_allclose(ssinfo["sides"][0], 6)
+        ssinfo = sidesets[2] # outlet_bg
+        np.testing.assert_equal(ssinfo["name"], "outlet_bg")
+        np.testing.assert_allclose(ssinfo["elements"], [3, 9, 6, 12])
+        np.testing.assert_allclose(ssinfo["sides"][0], 2)
+
     def test_cuboid_large_legacy(self):
         ls = (120.0, 120.0, 4.0)
         ns = (166, 166, 121)
