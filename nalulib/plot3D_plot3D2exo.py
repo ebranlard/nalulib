@@ -10,51 +10,6 @@ from nalulib.exodus_core import force_quad_positive_about_z
 from nalulib.weio.plot3d_file import read_plot3d
 
 
-def _plt3d_to_quads(input_file):
-    # --- Read input
-    dims = np.loadtxt(input_file, skiprows=1,max_rows=1,dtype=int)
-    a = np.loadtxt(input_file, skiprows=2)
-    xyz = a.reshape((3, dims[0]*dims[1]*dims[2] )).transpose()
-    # --- Convert to 2D
-    nx = dims[0]-1
-    ny = dims[2]
-    print('dims:', dims)
-    xyz_2d = np.zeros((nx * ny, 2))
-    for j in range(ny):
-        for i in range(nx):
-            idx = i + j * dims[0] * dims[1]
-            xyz_2d[i + j * nx] = np.r_[xyz[idx,0], xyz[idx,1]]
-
-    # --- Connectivity
-    conn = np.zeros((nx*(ny-1),4),dtype=int)
-    for j in range(ny-1):
-        for i in range(nx-1):
-            conn[i + j * nx] = np.array([i + j * nx, i + (j+1) * nx, i+1 + (j+1) * nx, i+1 + j * nx ])
-        conn[(nx-1) + j * nx] = np.array([(nx-1) + j * nx, nx-1 + (j+1) * nx, (j+1) * nx, j * nx])
-    conn += 1
-
-    # Get inflow and outflow elements on the farfield boundary
-    elem_farfield = np.linspace(conn.shape[0]-nx+1, conn.shape[0], nx, dtype=int)
-    coordsx_farfield = np.r_[0.5 * (xyz_2d[-nx:-1, 0] + xyz_2d[-nx+1:,0]), 0.5 *(xyz_2d[-1, 0] + xyz_2d[-nx, 0])]
-    #for i, x in zip(elem_farfield, coordsx_farfield):
-    #    print(f"Element {i}: x = {x}")
-    elem_inflow = elem_farfield[np.where(coordsx_farfield < 0)]
-    elem_outflow = elem_farfield[np.where(coordsx_farfield >= 0)]
-
-    ndim = 2
-    type = 'QUAD'
-    node_count = nx * ny
-    cell_count = nx * (ny-1)
-    block_names = ['fluid']
-    sideset_names = ['airfoil','inflow', 'outflow']
-    sideset_cells = [np.linspace(0,nx-1,nx,dtype=int)+1, 
-                     elem_inflow,
-                     elem_outflow]  # +1 for 1-based indexing in Exodus
-    sideset_sides = [4 * np.ones_like(sideset_cells[0], dtype=int), 
-                     2 * np.ones_like(sideset_cells[1], dtype=int),
-                     2 * np.ones_like(sideset_cells[2], dtype=int)]  # All sides are on the airfoil
-
-    return xyz_2d, conn, sideset_names, sideset_cells, sideset_sides 
 
 
 def build_simple_hex_connectivity(dims):

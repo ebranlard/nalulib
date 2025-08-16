@@ -56,10 +56,10 @@ def print_nodes(coords, node_ids=None, nn=None):
         print(f"Node ID: {node_id}, Coordinates: {coords[i]}")
 
 
-def exo_info(filename, n=5, nss=10):
+def exo_info(filename, n=5, nss=10, nsse=5):
     print(f"Filename:                 {filename}")
     with ExodusIIFile(filename, mode="r") as exo:
-        warnings = explore_exodus(exo, n=n, nss=nss)
+        warnings = explore_exodus(exo, n=n, nss=nss, nsse=nsse)
 
     if len(warnings) > 0:
         print("\n------- WARNINGS ------------")
@@ -69,7 +69,7 @@ def exo_info(filename, n=5, nss=10):
     else:
         print(f"[ OK ] No warnings found analyzing {filename}.")
 
-def explore_exodus(exo, n=5, nss=10):
+def explore_exodus(exo, n=5, nss=10, nsse=5):
     warnings=[]
     # Basic information
     block_ids = exo.get_element_block_ids()
@@ -129,9 +129,6 @@ def explore_exodus(exo, n=5, nss=10):
     nn = min(n, exo.num_nodes())
     print("\n--- First {}/{} Nodes ---".format(nn, exo.num_nodes()))
     node_ids = exo.get_node_id_map()
-    for i, node_id in enumerate(node_ids[:nn]):
-        coords = node_coords[i]
-        print(f"Node ID: {node_id}, Coordinates: {coords}")
     print_nodes(node_coords, node_ids=node_ids, nn=nn)
 
 
@@ -185,14 +182,20 @@ def explore_exodus(exo, n=5, nss=10):
     nss = min(nss, exo.num_side_sets())
     print("\n--- First {}/{} Side Sets ---".format(nss, exo.num_side_sets()))
     side_set_ids = exo.get_side_set_ids()
-    for i, set_id in enumerate(side_set_ids[:nss]):
-        try:
-            side_set = exo.get_side_set(set_id)
-            print(f"Side Set ID: {side_set.id}, Name: {side_set.name}")
-            print(f"  Elements: {side_set.elems[:n]} (len={len(side_set.elems)}, nUnique={len(np.unique(side_set.elems))})")
-            print(f"  Sides   : {side_set.sides[:n]} (len={len(side_set.sides)}, nUnique={len(np.unique(side_set.sides))})")
-        except:
-            print(f"Side Set ID: {set_id} not found or empty.")
+    if side_set_ids is None:
+        print("No side sets found in this file.")
+    else:
+        for i, set_id in enumerate(side_set_ids[:nss]):
+            try:
+                side_set = exo.get_side_set(set_id)
+                elems = [int(x) for x in side_set.elems ]
+                sorted_elems = sorted(elems)
+                print(f"Side Set ID: {side_set.id}, Name: {side_set.name}")
+                print(f"  Elements Sorted: {sorted_elems[:nsse]} (len={len(side_set.elems)}, nUnique={len(np.unique(side_set.elems))})")
+                print(f"  Elements       : {elems[:nsse]} (len={len(side_set.elems)}, nUnique={len(np.unique(side_set.elems))})")
+                print(f"  Sides   : {side_set.sides[:n]} (len={len(side_set.sides)}, nUnique={len(np.unique(side_set.sides))})")
+            except:
+                print(f"Side Set ID: {set_id} not found or empty.")
     return warnings
 
 
@@ -202,9 +205,10 @@ def exo_info_CLI():
     parser.add_argument("filename", type=str, help="Path to the Exodus file to explore.")
     parser.add_argument("-n", type=int, default=5, help="Number of elements / nodes to display.")
     parser.add_argument("-nss", type=int, default=10, help="Number of side sets to display.")
+    parser.add_argument("-nsse", type=int, default=5, help="Number of side sets elements to display.")
     args = parser.parse_args()
 
-    exo_info(args.filename, n=args.n, nss=args.nss)
+    exo_info(args.filename, n=args.n, nss=args.nss, nsse=args.nsse)
 
 
 if __name__ == "__main__":
