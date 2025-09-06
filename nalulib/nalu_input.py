@@ -2,7 +2,7 @@
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import nalulib.pyplot as plt
 from io import StringIO
 
 import yaml
@@ -92,22 +92,23 @@ class YamlEditor:
       - yaml: sort keys, and discard comments
       - ruamel: perserve comments, can sort keys, but looses id and anchor information
     """
-    def __init__(self, filename, reader='ruamel', sort=False, profiler=False):
+    def __init__(self, filename=None, reader='ruamel', sort=False, profiler=False):
         #if sort:
         #    reader = 'yaml'
         self.filename = filename
         self.reader=reader
 
-        with Timer('Reading yaml file', silent = not profiler, writeBefore=True):
-            if self.reader=='ruamel':
-                self.yaml = ruamel.yaml.YAML()
-                self.yaml.preserve_quotes = True
-                with open(filename, 'r', encoding='utf-8') as fid:
-                    fid.seek(0)
-                    self.data = self.yaml.load(fid)
-            else:
-                with open(filename, 'r', encoding='utf-8') as fid:
-                    self.data = yaml.safe_load(fid)
+        if filename is not None:
+            with Timer('Reading yaml file', silent = not profiler, writeBefore=True):
+                if self.reader=='ruamel':
+                    self.yaml = ruamel.yaml.YAML()
+                    self.yaml.preserve_quotes = True
+                    with open(filename, 'r', encoding='utf-8') as fid:
+                        fid.seek(0)
+                        self.data = self.yaml.load(fid)
+                else:
+                    with open(filename, 'r', encoding='utf-8') as fid:
+                        self.data = yaml.safe_load(fid)
 
     def sort(self, inplace=False, depth=2):
         data = self.data
@@ -119,6 +120,10 @@ class YamlEditor:
             self.data = data
         else:
             return data
+
+
+    def write(self, *args, **kwargs):
+        self.save(*args, **kwargs)
 
     def save(self, outpath=None, sort=False):
         if sort: 
@@ -339,9 +344,16 @@ def process_motion_list(motions):
 
 class NALUInputFile(YamlEditor):
 
-    def __init__(self, filename, reader='yaml', profiler=False):
+    def __init__(self, filename=None, reader='yaml', profiler=False):
         """ Initialize NALUInputFile with a YAML file path """
         super().__init__(filename=filename, reader=reader, profiler=profiler)
+
+    def copy(self):
+        new = NALUInputFile()
+        new.reader = self.reader
+        new.data = self.data.copy()
+        new.filename = None
+        return new
 
     def __repr__(self):
             s = f"<{type(self).__name__} object read with {self.reader}>\n"
@@ -421,6 +433,17 @@ class NALUInputFile(YamlEditor):
         #raise Exception('Unable to extract velocity from yaml file')
         return np.nan
 
+    @velocity.setter
+    def velocity(self, new_velocity):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    bc['inflow_user_data']['velocity'] = new_velocity
+            for ic in realm['initial_conditions']:
+                if 'value' in ic and 'velocity' in ic['value']:
+                    ic['value']['velocity'] = new_velocity
+
+
     @property
     def density(self):
         for realm in self.data['realms']:
@@ -431,9 +454,16 @@ class NALUInputFile(YamlEditor):
         #raise Exception('Unable to extract density from yaml file')
         return np.nan
 
+    @density.setter
+    def density(self, new_density):
+        for realm in self.data['realms']:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'density':
+                    specs['value'] = new_density
+
     @property
     def viscosity(self):
-        """ kinametic viscosity , nu = mu/rho """
+        """ kinematic viscosity , nu = mu/rho """
         for realm in self.data['realms']:
             #if 'material_properties' in realm:
             for specs in realm['material_properties']['specifications']:
@@ -441,6 +471,13 @@ class NALUInputFile(YamlEditor):
                     return specs['value']
         #raise Exception('Unable to extract density from yaml file')
         return np.nan
+
+    @viscosity.setter
+    def viscosity(self, new_viscosity):
+        for realm in self.data['realms']:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'viscosity':
+                    specs['value'] = new_viscosity
 
     @property
     def turbulence_model(self):
@@ -491,10 +528,10 @@ class NALUInputFile(YamlEditor):
             mesh_motion = data['mesh_motion']
             print('Found mesh_motion line')
         else:
-            for realm in data.get('realms', []):
+            for irealm, realm in enumerate(data.get('realms', [])):
                 if 'mesh_motion' in realm:
                     mesh_motion = realm['mesh_motion']
-                    print('Found mesh_motion line in realms') 
+                    print('Found mesh_motion line in realms', irealm) 
                     break
         if mesh_motion is None:
             raise ValueError("No 'mesh_motion' block found in the YAML file.")
@@ -529,6 +566,22 @@ class NALUInputFile(YamlEditor):
 
         #return types, angles, start_times, end_times, axes, origins, theta_deg_array, time_array
         return df
+
+
+
+    def set_sine_motion(self, A, f, n_periods, t_steady=0, dt=None, DOF='pitch', plot=False, irealm=0):
+        if dt is None:
+            dt = self.time_dict['dt']
+        t, x, y, theta = sine_motion(A, f, n_periods, t_steady, dt, DOF=DOF)
+        self.set_motion(t, x, y, theta, plot=plot, irealm=irealm)
+        return t, x, y, theta
+
+
+    def set_motion(self, t, x, y, theta, plot=False, irealm=0):
+        mesh_motion = generate_mesh_motion(t, x, y, theta, plot=plot)
+        self.data['realms'][irealm]['mesh_motion'] = [mesh_motion]
+        if plot:
+            self.extract_mesh_motion(plot=plot)
 
     def check(self, verbose=True):
         """
@@ -631,7 +684,85 @@ class NALUInputFile(YamlEditor):
             print("[ OK ] All checks passed.")
         return errors
 
-def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False, reader='yaml', verbose=False, profiler=False):
+
+def sine_motion(A, f, n_periods, t_steady, dt, DOF='pitch'):
+
+    def sine_with_steady(A, f, n_periods, t_steady, dt):
+        num_iter_steady=int(round(t_steady / dt))
+        #------------------------------- Steady state part --------------------------
+        x_st = np.linspace(0.0, 0.0, num_iter_steady + 1)
+        time_st = np.linspace(0.0, t_steady, num_iter_steady + 1)
+
+        #----------------------------- Dynamic part ---------------------------
+        T = 1 / f
+        sin_duration = n_periods * T
+        sin_num_iter = int(round(sin_duration / (dt)))
+        sin_duration = int(round(sin_duration / (dt)))*dt
+
+        time_sin = np.linspace(0.0, sin_duration, sin_num_iter + 1)
+        x_sine   = A * np.sin(2 * np.pi * f * time_sin)
+        t = np.concatenate((time_st[:-1], time_st[-1] + time_sin))
+        vel = 0*t
+        x_t = np.concatenate((x_st, x_sine[:-1]))
+        return x_t,  t, vel
+    
+    if DOF.lower() in ['pitch','theta']:
+        theta, t, vel = sine_with_steady(A, f, n_periods, t_steady, dt)
+        x=t*0
+        y=t*0
+    elif DOF.lower() in ['x','flap']:
+        x, t, vel = sine_with_steady(A, f, n_periods, t_steady, dt)
+        theta=t*0
+        y=t*0
+    elif DOF.lower() in ['y','edge']:
+        y, t, vel = generate_sine(A, f, n_periods, t_steady, dt)
+        x=t*0
+        theta=t*0
+    return t, x, y, theta
+
+def generate_mesh_motion(t, x, y, theta, plot=False):
+
+    delta_theta = [j - i for i, j in zip(theta[: -1], theta[1 :])]
+    delta_x= [x2-x1 for x1, x2 in zip(x[: -1], x[1 :])]
+    delta_y= [y2-y1 for y1, y2 in zip(y[: -1], y[1 :])]
+
+    mesh_motion = {
+                'name': 'arbitrary_motion_airfoil',
+                'mesh_parts': ['fluid-HEX'],
+                'frame': 'non_inertial',
+                'motion': []
+            }
+
+    if np.any(theta != 0):
+        for i in range(len(t) - 1):
+            motion_block = {
+                'type': 'rotation',
+                'angle': float(delta_theta[i]),
+                #-------------------Sheryas' code---------
+                'start_time': float(t[i] + 1e-6),
+                'end_time': float(t[i + 1]),
+                #-------------------Sheryas' code---------
+                'axis': [0.0, 0.0, 1.0],
+                'origin': [float(delta_x[i]), float(delta_y[i]), 0.0]
+            }
+            mesh_motion['motion'].append(motion_block)
+        
+    elif np.any(x != 0) or np.any(y != 0):
+        for i in range(len(t) - 1):
+            motion_block = {
+                'type': 'translation',
+                'start_time': float(t[i] + 1e-6),
+                'end_time': float(t[i + 1]),
+                'displacement': [float(delta_x[i]), float(delta_y[i]), 0.0]
+                #'velocity'
+            }
+            mesh_motion['motion'].append(motion_block)
+    return mesh_motion
+
+
+
+def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False, reader='yaml', 
+               plot_motion=False, verbose=False, profiler=False):
     """
     Main function to handle NALU input file operations.
     :param input_file: Path to the NALU YAML input file.
@@ -659,6 +790,8 @@ def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False
             yml.save(outpath=outpath, sort=True)
             print(f"[INFO] Sorted file written to: {outpath}   (otherwise use --overwrite).")
             #print(f"       yaml reader: {yml.reader}")
+    if plot_motion:
+        yml.extract_mesh_motion(plot=True)
 
 
 def nalu_input_CLI():
@@ -670,17 +803,20 @@ def nalu_input_CLI():
     parser.add_argument("--no-check", action="store_true", help="Do not check YAML file for existing files and domains")
     parser.add_argument("--reader", default='yaml', help="Specify reader: 'yaml' or 'ruamel' (default: ruamel). Note: yaml sorts but looses comments. Ruamel sorts the first two levels only.", choices=['yaml', 'ruamel'])
     parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
+    parser.add_argument("--plot-motion", action="store_true", help="Extract and Plot mesh motion")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
-    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler)  
+    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler, plot_motion=args.plot_motion)  
 
 if __name__ == '__main__':
 
     ##yml = NALUInputFile('input2.yaml')
-    #yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
+    yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
+    yml.set_sine_motion(A=10, f=1, n_periods=1, t_steady=20, DOF='pitch', plot=True, irealm=1)
+    yml.write('_DUMMY.yml')
     ##yml = NALUInputFile('_mesh_motion/input_restart.yaml')
-    ##yml.extract_mesh_motion(plot=True, export=True)
+    #yml.extract_mesh_motion(plot=True, export=True)
     #yml.print()
     #pass
 

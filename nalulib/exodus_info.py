@@ -56,10 +56,10 @@ def print_nodes(coords, node_ids=None, nn=None):
         print(f"Node ID: {node_id}, Coordinates: {coords[i]}")
 
 
-def exo_info(filename, n=5, nss=10, nsse=5):
+def exo_info(filename, n=5, nss=10, nsse=5, doRaise=False):
     print(f"Filename:                 {filename}")
     with ExodusIIFile(filename, mode="r") as exo:
-        warnings = explore_exodus(exo, n=n, nss=nss, nsse=nsse)
+        warnings = explore_exodus(exo, n=n, nss=nss, nsse=nsse, doRaise=doRaise)
 
     if len(warnings) > 0:
         print("\n------- WARNINGS ------------")
@@ -69,7 +69,7 @@ def exo_info(filename, n=5, nss=10, nsse=5):
     else:
         print(f"[ OK ] No warnings found analyzing {filename}.")
 
-def explore_exodus(exo, n=5, nss=10, nsse=5):
+def explore_exodus(exo, n=5, nss=10, nsse=5, doRaise=False):
     warnings=[]
     # Basic information
     block_ids = exo.get_element_block_ids()
@@ -196,6 +196,9 @@ def explore_exodus(exo, n=5, nss=10, nsse=5):
                 print(f"  Sides   : {side_set.sides[:n]} (len={len(side_set.sides)}, nUnique={len(np.unique(side_set.sides))})")
             except:
                 print(f"Side Set ID: {set_id} not found or empty.")
+
+    if doRaise and len(warnings)>0:
+        raise ValueError("Warnings found during Exodus file exploration:\n" + "\n".join(warnings))
     return warnings
 
 
@@ -206,9 +209,10 @@ def exo_info_CLI():
     parser.add_argument("-n", type=int, default=5, help="Number of elements / nodes to display.")
     parser.add_argument("-nss", type=int, default=10, help="Number of side sets to display.")
     parser.add_argument("-nsse", type=int, default=5, help="Number of side sets elements to display.")
+    parser.add_argument("--check", action="store_true", help="Raise an error if warnings are found.")
     args = parser.parse_args()
 
-    exo_info(args.filename, n=args.n, nss=args.nss, nsse=args.nsse)
+    exo_info(args.filename, n=args.n, nss=args.nss, nsse=args.nsse, doRaise=args.check)
 
 
 if __name__ == "__main__":

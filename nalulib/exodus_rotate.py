@@ -245,6 +245,7 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
 
             output_file = os.path.join(base_dir, base+ext)
 
+        import gc
         with Timer("Writing rotated Exodus file", silent=not profiler):
             with ExodusIIFile(output_file, mode="w") as exo_out:
                 exo_out.put_init(
@@ -277,6 +278,9 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
                     exo_out.put_side_set_param(side_set_id, len(side_set_data["elements"]))
                     exo_out.put_side_set_sides(side_set_id, side_set_data["elements"], side_set_data["sides"])
                     exo_out.put_side_set_name(side_set_id, side_set_data["name"])
+                exo_out.close()
+                del exo_out
+        gc.collect()
         print(f"Written Exodus file: {output_file}")
 
 def exo_rotate_CLI():
