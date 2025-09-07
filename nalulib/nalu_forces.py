@@ -115,7 +115,9 @@ def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tm
         if i==0:
             df_prev = df
         else:
-            df = df+df_prev
+            # Add all except 'time'
+            df.loc[:, df.columns != 'Time'] = df.drop(columns='Time') + df_prev.drop(columns='Time')
+            df['Time'] = (df['Time'] + df_prev['Time']) / 2
 
     return df, Fin, yml, U0, rho, nu
 
