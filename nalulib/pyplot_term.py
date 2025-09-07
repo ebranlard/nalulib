@@ -37,10 +37,19 @@ class DummyAx():
             x = [x]
         if not hasattr(y, '__len__'):
             y = [y]
+
+        nan = np.isnan(y.astype(float))
+        
+        if sum(nan) == len(y):
+            y = x*0
+            print('[WARN] Values are NaN and replaced by 0')
+            if 'label' in kwargs:
+                kwargs['label'] += ' NAN'
         #print(kwargs.keys())
 
         if color is None:
             color = COLORS[self.iPlot % len(COLORS)]
+        print(color)
         marker = MARKERS[self.iPlot % len(MARKERS)]
 
         if self.ia is not None and self.ib is not None:
@@ -60,6 +69,16 @@ class DummyAx():
         if self.ia is not None and self.ib is not None:
             _plt.subplot(self.ia+1, self.ib+1)
         _plt.ylabel(*args, **kwargs)
+
+    def set_xlim(self, lims):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
+        _plt.xlim(lims[0], lims[1])
+
+    def set_ylim(self, lims):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
+        _plt.ylim(lims[0], lims[1])
 
     def set_aspect(self, *args, **kwargs):
         #print('[pyplott] aspect skipped')
@@ -125,11 +144,49 @@ def subplots(a, b, figsize=None, sharey=None, **kwargs):
 # 
 #def show():
 #    _plt.show()
+def figure(*args, **kwargs):
+    return DummyFig()
 
+def xlim(lims):
+    _plt.xlim(lims[0], lims[1])
+
+def ylim(lims):
+    _plt.ylim(lims[0], lims[1])
+
+
+
+def plot(x, y, *args, color=None, ms=None, iPlot=[0], markerfacecolor=None, **kwargs):
+    if len(args)==1:
+        sty = args[0]
+        #print('>>> sty', sty)
+    if not hasattr(x, '__len__'):
+        x = [x]
+    if not hasattr(y, '__len__'):
+        y = [y]
+    nan = np.isnan(y.astype(float))
+    
+    if sum(nan) == len(y):
+        y = x*0
+        print('[WARN] Values are NaN and replaced by 0')
+        if 'label' in kwargs:
+            kwargs['label'] += ' NAN'
+
+    #marker = MARKERS[self.iPlot % len(MARKERS)]
+    if color is None:
+        color = COLORS[iPlot[0] % len(COLORS)]
+    marker = MARKERS[0]
+
+    _plt.plot(x, y, marker=marker, color=color, **kwargs)
+    iPlot[0]+=1
+
+def legend(*args, **kwargs):
+    pass
+    #_plt.legend()
 
 
 if __name__ == '__main__':
-    fig, ax= subplots()
+    fig, ax= subplots(1, 1)
 
-    ax.plot([0,1], [0,1])
+    ax.plot([0,1], [0,1], '-', label='Hello')
+    ax.plot([0,1], [-1,0],'-', label='You')
     _plt.show()

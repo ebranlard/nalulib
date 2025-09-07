@@ -37,28 +37,39 @@ def extract_aoa(filename):
             return None
     return None
 
-def reference_force(chord=1, rho=1.2, nu=9e-6, U0=None, dz=1, yaml_file='input.yaml', auto=True, dimensionless=True, verbose=False):
-    # --- Infer velocity and density from input file
-    if os.path.exists(yaml_file) and auto:
-        print('[INFO] Reading velocity and density from input file:', yaml_file)
-        yml = NALUInputFile(yaml_file)
-        if verbose:
-            print(yml)
-        if U0 is None:
-            vel = yml.velocity
-            U0 = np.linalg.norm(vel)
-        if rho is None:
-            rho = yml.density
-        if nu is None:
-            nu = yml.viscosity
 
+def reference_force_yml(yml, Aref, dimensionless):
+    #if verbose:
+    #    print(yml)
+    vel = yml.velocity
+    U0  = np.linalg.norm(vel)
+    rho = yml.density
+    nu  = yml.viscosity
     Fin = 1
     if dimensionless:
         if (U0 is None or rho is None or nu is None):
             raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
         # Dimensionless forces
-        Fin = 0.5 * rho * chord *dz * U0**2
-    return Fin, U0, rho, nu
+        Fin = 0.5 * rho * Aref * U0**2
+    return Fin, U0, rho, nu, yml
+
+def reference_force(Aref=1, rho=1.2, nu=9e-6, U0=None, yaml_file='input.yaml', auto=True, dimensionless=True, verbose=False, yml=None):
+    # --- Infer velocity and density from input file
+    if yml is not None:
+        Fin, U0, rho, nu, yml = reference_force_yml(yml, Aref, dimensionless)
+    elif os.path.exists(yaml_file) and auto:
+        print('[INFO] Reading velocity and density from input file:', yaml_file)
+        yml = NALUInputFile(yaml_file)
+        Fin, U0, rho, nu, yml = reference_force_yml(yml, Aref, dimensionless)
+    else:
+        yml = None
+        Fin = 1
+        U0 = U0
+        rho = rho
+        nu = nu
+        if dimensionless:
+            raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
+    return Fin, U0, rho, nu, yml
 
 
 def read_forces(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fin=None):
@@ -81,6 +92,34 @@ def read_forces(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fi
     return df
 
 
+
+def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tmin=None, tmax=None):
+    yml = None
+    Fin = 1.0
+    _, ext = os.path.splitext(yaml_file)
+    if ext.lower() not in ['.yaml', '.yml', '.i']:
+        raise Exception('Input should be yaml', yaml_file)
+    yml = NALUInputFile(yaml_file)
+    Fin, U0, rho, nu, _ = reference_force_yml(yml, Aref, dimensionless=dimensionless)
+    csv_files = []
+    basedir = os.path.dirname(yaml_file)
+    for realm in yml.data['realms']: 
+        if 'post_processing' in realm:
+            for pp in realm['post_processing']:
+                force_file = os.path.join(basedir, pp['output_file_name'])
+                print(force_file)
+                csv_files.append(force_file)
+
+    for i, csv_file in enumerate(csv_files):
+        df = read_forces(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+        if i==0:
+            df_prev = df
+        else:
+            df = df+df_prev
+
+    return df, Fin, yml, U0, rho, nu
+
+
 def plot_forces(input_files='forces.csv', tmin=None, tmax=None, 
                 chord=1, rho=None, nu=None, U0=None, dz=1, 
                 yaml_file='input.yaml', 
@@ -94,9 +133,16 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
                 plot=True
                 ):
 
+
+    # --- Derived inputs
+    FC, label= 'F', 'Forces [N]'
+    if dimensionless:
+        FC, label='C' , 'Coefficient [-]'
+    Aref = chord*dz
+
     # --- Are we dealing with multiple files or one file?
     if isinstance(input_files, str):
-            input_files = [input_files]
+        input_files = [input_files]
     patterns = input_files 
     input_files = []
     for pattern in patterns:
@@ -112,24 +158,33 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
     input_files = sorted(input_files)
     print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
 
-    # --- Get reference force
-    Fin, U0, rho, nu = reference_force(chord=chord, rho=rho, nu=nu, U0=U0, dz=dz, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
-    FC, label= 'F', 'Forces [N]'
-    if dimensionless:
-        FC, label='C' , 'Coefficient [-]'
+    # --- Are we dealing with csv or yaml files
+    _, ext = os.path.splitext(input_files[0])
+    input_is_csv = True
+    if ext.lower() in ['.yaml', '.yml', '.i']:
+        print('[INFO] Input files are yaml files instead of csv files, overridding yaml_file')
+        input_is_csv = False
+        yaml_file = input_files [0]
 
-    if verbose:
-        print('chord: {:9.3f}  '.format(chord))
-        print('dz   : {:9.3f}  '.format(dz))
-        print('U0   : {:9.3f}  '.format(U0))
-        print('rho  : {:9.3f}  '.format(rho))
-        print('nu   : {:9.3e}  '.format(nu))
-        print('Re   : {:9.3f} Million'.format(U0 * chord /(nu*1e6)))
-        print('Fref : {:9.3f} [N]'.format(Fin))
 
+    # --- One input_file
     if len(input_files) == 1:
         for input_file in input_files:
-            df = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+            if input_is_csv:
+                Fin, U0, rho, nu, yml = reference_force(Aref=Aref, rho=rho, nu=nu, U0=U0, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
+                df, yml = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+            else:
+                df, yml, Fin, U0, rho, nu = read_forces_yaml(input_file, Aref=Aref, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+
+            if verbose:
+                print('chord: {:9.3f}  '.format(chord))
+                print('dz   : {:9.3f}  '.format(dz))
+                print('U0   : {:9.3f}  '.format(U0))
+                print('rho  : {:9.3f}  '.format(rho))
+                print('nu   : {:9.3e}  '.format(nu))
+                print('Re   : {:9.3f} Million'.format(U0 * chord /(nu*1e6)))
+                print('Fref : {:9.3f} [N]'.format(Fin))
+
             if verbose:
                 print("Filename:", input_file)
                 print('Final values: {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(FC, df['Cx'].values[-1], FC, df['Cy'].values[-1]))
@@ -151,15 +206,29 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
         return
 
     # ---
+
+    # --- Get reference force
+    if input_is_csv:
+        Fin, U0, rho, nu, yml = reference_force(chord=chord, rho=rho, nu=nu, U0=U0, dz=dz, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
+    else:
+        Fin = None
+
     results = []
     for input_file in input_files:
         if verbose:
             print("Filename:", input_file)
-        try:
-            df = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
-        except Exception as e:
-            print(f"[FAIL] Error reading {input_file}: {e}")
-            continue
+        if input_is_csv:
+            try:
+                df = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+            except Exception as e:
+                print(f"[FAIL] Error reading {input_file}: {e}")
+                continue
+        else:
+            try:
+                df, yml, Fin, U0, rho, nu = read_forces_yaml(input_file, Aref=Aref, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+            except Exception as e:
+                print(f"[FAIL] Error reading {input_file}: {e}")
+                continue
         aoa = extract_aoa(input_file)
         results.append({'alpha': aoa, 'Cl': df['Cy'].values[-1], 'Cd': df['Cx'].values[-1]})
 
@@ -204,7 +273,7 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
 
 def nalu_forces_CLI():
     parser = argparse.ArgumentParser(description="Plot Nalu forces from a CSV file, optionally dimensionless.")
-    parser.add_argument('input', type=str, nargs='+', default='forces*.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
+    parser.add_argument('input', type=str, nargs='*', default='forces*.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
     parser.add_argument('--tmin', type=float, default=None, help='Minimum time')
     parser.add_argument('--tmax', type=float, default=None, help='Maximum time')
     parser.add_argument('--chord', type=float, default=1.0, help='Airfoil chord')
