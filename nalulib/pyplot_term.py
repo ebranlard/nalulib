@@ -37,6 +37,8 @@ class DummyAx():
             x = [x]
         if not hasattr(y, '__len__'):
             y = [y]
+        x = np.asarray(x)
+        y = np.asarray(y)
 
         nan = np.isnan(y.astype(float))
         
@@ -163,6 +165,8 @@ def plot(x, y, *args, color=None, ms=None, iPlot=[0], markerfacecolor=None, **kw
         x = [x]
     if not hasattr(y, '__len__'):
         y = [y]
+    x = np.asarray(x)
+    y = np.asarray(y)
     nan = np.isnan(y.astype(float))
     
     if sum(nan) == len(y):
