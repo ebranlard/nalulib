@@ -576,6 +576,13 @@ class NALUInputFile(YamlEditor):
         self.set_motion(t, x, y, theta, plot=plot, irealm=irealm)
         return t, x, y, theta
 
+    def set_step_motion(self, A, t_steady, dt=None, DOF='pitch', plot=False, irealm=0, nramp=5):
+        if dt is None:
+            dt = self.time_dict['dt']
+        t, x, y, theta = step_motion(A, t_steady, dt, DOF=DOF, nramp=nramp)
+        self.set_motion(t, x, y, theta, plot=plot, irealm=irealm)
+        return t, x, y, theta
+
 
     def set_motion(self, t, x, y, theta, plot=False, irealm=0):
         mesh_motion = generate_mesh_motion(t, x, y, theta, plot=plot)
@@ -684,6 +691,25 @@ class NALUInputFile(YamlEditor):
             print("[ OK ] All checks passed.")
         return errors
 
+def step_motion(A, t_steady, dt, DOF='pitch', nramp=3):
+    t0= [0 , t_steady , t_steady+nramp*dt , 2*t_steady]
+    x0= [0 , 0        , A                 , A]
+    t   = np.arange(0, 2*t_steady+dt, dt)
+    x_t = np.interp(t, t0, x0)
+    
+    if DOF.lower() in ['pitch','theta']:
+        theta = x_t
+        x     = t*0
+        y     = t*0
+    elif DOF.lower() in ['x','flap']:
+        x     = x_t
+        theta = t*0
+        y     = t*0
+    elif DOF.lower() in ['y','edge']:
+        y     = y_t
+        x     = t*0
+        theta = t*0
+    return t, x, y, theta
 
 def sine_motion(A, f, n_periods, t_steady, dt, DOF='pitch'):
 
@@ -813,7 +839,8 @@ if __name__ == '__main__':
 
     ##yml = NALUInputFile('input2.yaml')
     yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
-    yml.set_sine_motion(A=10, f=1, n_periods=1, t_steady=20, DOF='pitch', plot=True, irealm=1)
+    #yml.set_sine_motion(A=10, f=1, n_periods=1, t_steady=20, DOF='pitch', plot=True, irealm=1)
+    yml.set_step_motion(A=2, t_steady=0.5, DOF='pitch', plot=True, irealm=1)
     yml.write('_DUMMY.yml')
     ##yml = NALUInputFile('_mesh_motion/input_restart.yaml')
     #yml.extract_mesh_motion(plot=True, export=True)
