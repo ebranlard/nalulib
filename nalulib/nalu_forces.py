@@ -211,7 +211,8 @@ def plot_forces(input_files='forces.csv', tmin=None, tmax=None,
 
     # --- Get reference force
     if input_is_csv:
-        Fin, U0, rho, nu, yml = reference_force(chord=chord, rho=rho, nu=nu, U0=U0, dz=dz, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
+        #def reference_force(Aref=1, rho=1.2, nu=9e-6, U0=None, yaml_file='input.yaml', auto=True, dimensionless=True, verbose=False, yml=None):
+        Fin, U0, rho, nu, yml = reference_force(Aref=chord*dz, rho=rho, nu=nu, U0=U0, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
     else:
         Fin = None
 

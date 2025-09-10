@@ -99,6 +99,7 @@ class CSVFile(File):
                         return line.strip()
                     elif i>iLine:
                         break
+            return None
         def split(s):
             if s is None:
                 return []
@@ -219,6 +220,8 @@ class CSVFile(File):
                 iStartLine = iStartLine+1
                 #  --- Now, maybe the user has put some units below
                 first_line = readline(iStartLine)
+                if first_line is None:
+                    raise EmptyFileError('No data found after header in CSV file {}'.format(self.filename))
                 #print('>>> first line',first_line)
                 first_cols = split(first_line)
                 nFloat = sum([strIsFloat(s) for s in first_cols])

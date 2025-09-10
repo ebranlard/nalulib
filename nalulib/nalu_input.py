@@ -306,8 +306,8 @@ def process_motion_list(motions):
     df_tra = df[df['type'] == 'translation'].copy()
 
     # Compute cumulative values for each
-    df_rot['Time [s]'] = df_rot['end_time'].cummax()
-    df_tra['Time [s]'] = df_tra['end_time'].cummax()
+    df_rot['Time_[s]'] = df_rot['end_time'].cummax()
+    df_tra['Time_[s]'] = df_tra['end_time'].cummax()
 
     df_rot['dt'] = df_rot['end_time']-df_rot['start_time']
     df_tra['dt'] = df_tra['end_time']-df_rot['start_time']
@@ -324,11 +324,11 @@ def process_motion_list(motions):
     df_tra['z'] = df_tra['dz'].cumsum()
 
     # Drop unused columns
-    df_rot = df_rot[['Time [s]', 'angle', 'ox', 'oy']]
-    df_tra = df_tra[['Time [s]', 'x', 'y', 'z']]
+    df_rot = df_rot[['Time_[s]', 'angle', 'ox', 'oy']]
+    df_tra = df_tra[['Time_[s]', 'x', 'y', 'z']]
 
     # Merge/interpolate on Time (outer join, then interpolate missing values)
-    df = pd.merge(df_rot, df_tra, on='Time [s]', how='outer').sort_values('Time [s]').reset_index(drop=True)
+    df = pd.merge(df_rot, df_tra, on='Time_[s]', how='outer').sort_values('Time_[s]').reset_index(drop=True)
     df = df.interpolate(method='linear', limit_direction='both')
 
     # --- Debug prints for DataFrames
@@ -380,7 +380,7 @@ class NALUInputFile(YamlEditor):
                         for mesh_motion in realm['mesh_motion']:
                             motions_list = mesh_motion['motion']
                             df, _, _ = process_motion_list(motions_list)
-                            s += f"          - size:{len(df)} tmin:{df['Time [s]'].min():.3f} tmax:{df['Time [s]'].max():.3f} xmax:{df['x'].max():.3f} ymax:{df['y'].max():.3f} thmax:{df['angle'].max():.3f}\n"
+                            s += f"          - size:{len(df)} tmin:{df['Time_[s]'].min():.3f} tmax:{df['Time_[s]'].max():.3f} xmax:{df['x'].max():.3f} ymax:{df['y'].max():.3f} thmax:{df['angle'].max():.3f}\n"
                 specs, niter = equation_systems_specs(realms[0])
                 s += "     - equations_system: iterations:{},  specs:\n".format(niter)
             except Exception as e:
@@ -509,6 +509,15 @@ class NALUInputFile(YamlEditor):
         return target_names
 
     @property
+    def q0(self):
+        vel = self.velocity
+        U0  = np.linalg.norm(vel)
+        rho = self.density
+        q0 = 0.5 * rho *  U0**2
+        #F0 = q0 * Aref
+        return q0
+
+    @property
     def time_dict(self):
         """ Returns [tstart, dt, tmax] """
         return time_dict(self.data)
@@ -517,6 +526,10 @@ class NALUInputFile(YamlEditor):
     def solvers_dict(self):
         """ Returns [tstart, dt, tmax] """
         return solvers_dict(self.data)
+
+    @property
+    def motion(self):
+        return self.extract_mesh_motion()
 
     def extract_mesh_motion(self, plot=False, csv_file=None, export=False):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
@@ -551,11 +564,11 @@ class NALUInputFile(YamlEditor):
         
         if plot:
             fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
-            ax.plot(df['Time [s]'].values, df['angle'].values, '-', label="theta [deg]")
-            ax.plot(df['Time [s]'].values, df['x'].values, '--', label="x [m]")
-            ax.plot(df['Time [s]'].values, df['y'].values, label="y [m]")
-            ax.plot(df['Time [s]'].values, df['ox'].values, "--", label="ox [m]")
-            ax.plot(df['Time [s]'].values, df['oy'].values, "--", label="oy [m]")
+            ax.plot(df['Time_[s]'].values, df['angle'].values, '-', label="theta [deg]")
+            ax.plot(df['Time_[s]'].values, df['x'].values, '--', label="x [m]")
+            ax.plot(df['Time_[s]'].values, df['y'].values, label="y [m]")
+            ax.plot(df['Time_[s]'].values, df['ox'].values, "--", label="ox [m]")
+            ax.plot(df['Time_[s]'].values, df['oy'].values, "--", label="oy [m]")
             ax.set_xlabel("t")
             ax.set_ylabel("Oscillation")
             ax.set_ylim([-15, 15])
@@ -590,7 +603,7 @@ class NALUInputFile(YamlEditor):
         if plot:
             self.extract_mesh_motion(plot=plot)
 
-    def check(self, verbose=True):
+    def check(self, verbose=True, raiseError=True):
         """
         Checks that all 'meshes' keys exist and that BC domain names are present in the exodus file.
         If exo_file is provided, checks BC domains against exodus side-sets and block names.
@@ -686,7 +699,10 @@ class NALUInputFile(YamlEditor):
 
 
         if errors:
-            raise Exception("Issues found in input file {}:\n -".format(self.filename) + '\n -'.join(errors))
+            if raiseError:
+                raise Exception("Issues found in input file {}:\n -".format(self.filename) + '\n -'.join(errors))
+            else:
+                print("[ WARN ] Issues found in input file {}:\n -".format(self.filename) + '\n -'.join(errors))
         else:
             print("[ OK ] All checks passed.")
         return errors

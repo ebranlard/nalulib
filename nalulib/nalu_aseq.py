@@ -16,7 +16,7 @@ from nalulib.exodus_rotate import exo_rotate
 
 
 def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
-        inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False):
+        inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False, raiseError=True):
     myprint('Input YAML file', input_file)
     # Basename
     base_dir = os.path.dirname(input_file)
@@ -48,7 +48,7 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
     myprint('Mesh', mesh_ori)
 
     # --- Check if the input file is valid
-    yml_ori.check(verbose=verbose)
+    yml_ori.check(verbose=verbose, raiseError=raiseError)
 
     if aoa_ori is None:
         aoa_ori = extract_aoa(mesh_ori)
@@ -151,6 +151,7 @@ def nalu_aseq_CLI():
     parser.add_argument("--cluster", default='unity', choices=["unity", "kestrel", "local"], help="Cluster type. If local, only one batch file is created.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument("--submit"     , action="store_true",  help="Submit generated batch file to cluster scheduler (`sbatch`).")
+    parser.add_argument("--no-check"   , action="store_true",  help="Do not raise errors if issues are found in the input file.")
 
     parser.add_argument("--inlet-name", type=str, default="inlet", help="Name for the inlet sideset (default: 'inlet'. alternative: 'inflow').")
     parser.add_argument("--outlet-name", type=str, default="outlet", help="Name for the outlet sideset (default: 'outlet'. alternative: 'outflow').")
@@ -171,7 +172,8 @@ def nalu_aseq_CLI():
         jobname=args.jobname,
         inlet_name=args.inlet_name,
         outlet_name=args.outlet_name,
-        submit=args.submit
+        submit=args.submit, 
+        raiseError=not args.no_check
     )
 
 if __name__ == "__main__":
