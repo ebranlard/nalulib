@@ -3,7 +3,9 @@ import os
 from nalulib.essentials import myprint
 
 
-def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False, jobname=None, mail=False, sim_dir=None, output_file=None):
+def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, verbose=False,  sim_dir=None, output_file=None, 
+              jobname=None, mail=False, hours=None, nodes=None, ntasks=None, mem=None, # sbatch options
+              ):
     """ Create a batch file for a nalu simulation based on a template and a cluster"""
     if batch_file_template is None:
         if cluster == 'unity':
@@ -27,18 +29,27 @@ def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, ver
         lines = f.readlines()
     # look for the line nalu_input=XXX and replace it with nalu_input=nalu_input_file
     for i, line in enumerate(lines):
-        if jobname is not None:
-            # Check if line contains the string "--job_name" anywher
-            if '--job-name' in line:
-                # Replace the line with the new job name
+        is_sbatch_line = line.startswith('#SBATCH')
+        if is_sbatch_line:
+            if '--job-name' in line and jobname is not None:
                 lines[i] = "#SBATCH --job-name={}\n".format(jobname)
-            if '--mail-' in line:
-                if not mail:
-                    lines[i] = '#' + line  # Comment the line
-        if line.startswith('nalu_input'):
+            elif '--mail-' in line and (not mail):
+                lines[i] = '#' + line  # Comment the line
+            elif '--time' in line and hours is not None:
+                d = hours // 24
+                h = hours % 24
+                lines[i] = '#SBATCH --time={:d}-{:02d}:00:00\n'.format(d,h)
+            elif '--nodes' in line and nodes is not None:
+                lines[i] = '#SBATCH --nodes={:d}\n'.format(nodes)
+            elif '--ntasks' in line and ntasks is not None:
+                lines[i] = '#SBATCH --ntasks={:d}\n'.format(ntasks)
+            elif '--mem' in line and mem is not None:
+                lines[i] = '#SBATCH --nmem={:s}\n'.format(mem)
+        elif line.startswith('nalu_input'):
             nalu_input_file = nalu_from_sim_dir.replace('./','').replace('.\\','')
             lines[i] = "nalu_input={}".format(nalu_from_sim_dir)+'\n'
             break
+
     # Write the new batch file in the current directory, based on the output_filename
     base_name = os.path.basename(nalu_input_file)
     base, ext = os.path.splitext(base_name)

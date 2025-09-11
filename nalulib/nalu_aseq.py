@@ -15,13 +15,23 @@ from nalulib.exodus_rotate import exo_rotate
 
 
 
-def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None, cluster='unity', aoa_ori=None, jobname='',
-        inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False, raiseError=True):
+def nalu_aseq(input_file, aseq=None, 
+              verbose=False, debug=False, 
+              mesh_file=None,
+              sim_dir=None,
+              batch_file=None, 
+              cluster=None, 
+              aoa_ori=None, 
+              inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False, raiseError=True, 
+              jobname='', hours=None, nodes=None, ntasks=None, mem=None,
+              ):
     myprint('Input YAML file', input_file)
     # Basename
     base_dir = os.path.dirname(input_file)
     base_name = os.path.basename(input_file)
     base, ext = os.path.splitext(base_name)
+    if sim_dir is not None:
+        base_dir = sim_dir
 
     if aseq is None:
         aseq = np.arange(-15, 15+3/2, 3)
@@ -30,13 +40,12 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
             aseq = np.arange(aseq[0], aseq[1]+aseq[2]/2, aseq[2])
         else:
             pass
-    myprint('cluster     ', cluster)
     myprint('AoA sequence', aseq)
 
 
     # --- Read YAML file
     yml_ori = NALUInputFile(input_file, reader='ruamel') # NOTE: using ruamel to keep comments
-    yml = NALUInputFile(input_file, reader='ruamel')
+    yml = yml_ori.copy()
     realms_ori = yml_ori.data['realms']
     realms = yml.data['realms']
     if len(realms) > 1:
@@ -44,8 +53,16 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
         realm  = realms[1]
     else:
         realm  = realms[0]
-    mesh_ori = realm['mesh']
-    myprint('Mesh', mesh_ori)
+
+    if mesh_file is None:
+        mesh_ori = realm['mesh']
+    else:
+        realms_ori[-1]['mesh'] = mesh_file
+        mesh_ori = mesh_file
+
+    mesh_ori_abs = os.path.join(os.path.dirname(input_file), mesh_ori)
+    myprint('Mesh abs', mesh_ori_abs)
+    myprint('Mesh    ', mesh_ori)
 
     # --- Check if the input file is valid
     yml_ori.check(verbose=verbose, raiseError=raiseError)
@@ -66,7 +83,7 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
     angles = aseq - aoa_ori
     mesh_files = [os.path.join(mesh_dir, base+'_mesh_aoa{:04.1f}.exo'.format(alpha)) for alpha in aseq]
     # 
-    exo_rotate(input_file=mesh_ori, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name, keep_io_side_set=keep_io_side_set)
+    exo_rotate(input_file=mesh_ori_abs, output_file=mesh_files, angle=angles, center=center, verbose=verbose, inlet_name=inlet_name, outlet_name=outlet_name, keep_io_side_set=keep_io_side_set)
     print('----------------------------------------------------------------------------')
 
 
@@ -104,6 +121,7 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
             myprint('Written NALU File', nalu_file)
         print('   ...') if ia==1 else None
     print('----------------------------------------------------------------------------')
+    batch_files = []
 
     # --- Create BATCH files
     if cluster == 'local':
@@ -119,7 +137,9 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
         batch_files = []
         for ia, (alpha, nalu_file) in enumerate(zip(aseq, nalu_files)):
             jobname_case = jobname + 'A{:04.1f}'.format(alpha)
-            new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1)
+            new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1, 
+                                   hours=hours, nodes=nodes, ntasks=ntasks, mem=mem,
+                                   sim_dir=base_dir)
             batch_files.append(new_batch)
             if ia in [0, len(aseq)-1]:
                 myprint('Written Batch File', new_batch, jobname_case)
@@ -132,6 +152,7 @@ def nalu_aseq(input_file, aseq=None, verbose=False, debug=False, batch_file=None
             print('[INFO] Submitting {} batch files using {}'.format(len(batch_files), cmd))
             for batch_file in batch_files:
                 os.system(cmd + ' ' + batch_file)
+    return nalu_files, batch_files 
 
 
 def nalu_aseq_CLI():

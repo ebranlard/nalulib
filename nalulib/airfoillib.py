@@ -166,7 +166,7 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
         if xte_min == xte_max:
             print('[INFO] Detected TE shape | (blunt)')
         elif PUpperTE[0]==xte_min:
-            print('[INFO] Detected TE shape \ (blunt)')
+            print('[INFO] Detected TE shape \\ (blunt)')
         elif PUpperTE[0]==xte_max:
             print('[INFO] Detected TE shape / (blunt)')
         else:

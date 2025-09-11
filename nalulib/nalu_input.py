@@ -5,6 +5,7 @@ import pandas as pd
 import nalulib.pyplot as plt
 from io import StringIO
 
+import copy
 import yaml
 import ruamel.yaml
 from ruamel.yaml.comments import CommentedMap
@@ -97,6 +98,7 @@ class YamlEditor:
         #    reader = 'yaml'
         self.filename = filename
         self.reader=reader
+        self.yaml=None
 
         if filename is not None:
             with Timer('Reading yaml file', silent = not profiler, writeBefore=True):
@@ -341,7 +343,6 @@ def process_motion_list(motions):
     return df, df_rot, df_tra
 
 
-
 class NALUInputFile(YamlEditor):
 
     def __init__(self, filename=None, reader='yaml', profiler=False):
@@ -351,8 +352,9 @@ class NALUInputFile(YamlEditor):
     def copy(self):
         new = NALUInputFile()
         new.reader = self.reader
-        new.data = self.data.copy()
+        new.data = copy.deepcopy(self.data)
         new.filename = None
+        new.yaml = self.yaml
         return new
 
     def __repr__(self):
@@ -608,6 +610,8 @@ class NALUInputFile(YamlEditor):
         Checks that all 'meshes' keys exist and that BC domain names are present in the exodus file.
         If exo_file is provided, checks BC domains against exodus side-sets and block names.
         """
+        parentdir = os.path.dirname(self.filename)
+
         data = self.data
         errors = []
         # Check for 'meshes' key at top level or in realms
@@ -616,11 +620,12 @@ class NALUInputFile(YamlEditor):
             if verbose:
                 print(f" - realm name: {realm['name']}")
                 print(f"   mesh  file: {mesh}")
-            if not os.path.exists(mesh):
-                errors.append(f"Mesh file '{mesh}' does not exist.")
+            mesh_abs = os.path.join(parentdir,mesh)
+            if not os.path.exists(mesh_abs):
+                errors.append(f"Mesh file '{mesh_abs}' does not exist.")
                 continue
 
-            names = exodus_get_names(mesh, lower=True)
+            names = exodus_get_names(mesh_abs, lower=True)
             block_names = names.get('element_blocks', [])   
             if verbose:
                 print('   side_sets :', names['side_sets'])
