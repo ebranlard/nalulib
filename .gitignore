@@ -13,3 +13,6 @@ example
 prod*
 
 tags
+
+.vscode*
+.github/*copilot*

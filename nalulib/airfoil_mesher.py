@@ -30,6 +30,8 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
         print(arf)
     if plot:
         arf.plot(title='Original')
+    arf_ori = arf.copy()
+    arf._ori = arf_ori
 
     if respline and method != 'refine' and method != 'none':
         print('[INFO] Performing respline before meshing. TE_type will be preserved:', arf._TE_TYPE)
@@ -58,28 +60,24 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
 
     if plot:
         arf.plot(title='Remeshed')
-    plt.show()
+
+    if plot:
+        # 6 plots
+        fig, axes = plt.subplots( 2, 3, gridspec_kw={'width_ratios': [1, 5, 1]}, figsize=(18, 5.5))
+        fig.subplots_adjust(left=0.04, right=0.99, top=0.95, bottom=0.07, hspace=0.20, wspace=0.20)
+        axes = np.asarray(axes)
+
+        arf_ori.tri_plot(title='Original', axes=axes[0,:], n_target=50)
+        arf.tri_plot(    title='Remeshed', axes=axes[1,:], n_target=50)
+        axes[0,0].set_xlim(axes[1,0].get_xlim())
+        axes[0,0].set_ylim(axes[1,0].get_ylim())
+        axes[0,2].set_xlim(axes[1,2].get_xlim())
+        axes[0,2].set_ylim(axes[1,2].get_ylim())
+
+        plt.show()
 
 
-
-    #print(arf)
-    #ax = arf.plot(title= 'Original', simple=True, label='Original')
-    #arf.copy().resample_refine(inplace=True, factor_surf=2, factor_te=1).plot(label='Refined', ax=ax, simple=True, sty='o')
-
-    #arf_hr = arf.copy()
-    ##arf_hr.resample_te(n_te=10, inplace=True)
-    #arf_hr.plot(title='High res')
-    #arf_hr.check_mesh(Re=1e6)
-    #print(arf_hr)
-    #arf_cos = arf_hr.resample_cosine(n_surf=11)
-    #arf_cos.check_mesh(Re=1e6)
-    #arf_cos.plot(title='cosine')
-    #arf_cos = arf_cos.resample_te(n_te=30)
-    #arf_cos.plot(title='cosine with TE resampling')
-    #print(arf_cos)
-    #arf_hyp = arf_hr.resample_hyperbolic(n_surf=101)
-    #arf_hyp.plot(title='hyperbolic')
-    #print(arf_hyp)
+    return arf
 
 
 
@@ -109,7 +107,7 @@ def mesh_airfoil_CLI():
 
     args = parser.parse_args()
 
-    mesh_airfoil(
+    arf = mesh_airfoil(
         airfoil_coords_wrap=args.input,
         method=args.method,
         n=args.n,
@@ -143,7 +141,28 @@ if __name__ == '__main__':
     #mesh_airfoil(os.path.join(scriptDir, '../data/FFA_211_Re=10M_AoA0_nSpan=120_airfoil.txt'), format='csv')
     #mesh_airfoil(os.path.join(scriptDir, '../data/FFA_211_Re=10M_AoA0_nSpan=120_airfoil.txt'), format='csv')
     #mesh_airfoil(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), format='pointwise', verbose=True)
-    #mesh_airfoil(os.path.join(scriptDir, '../data/airfoils/S809.csv'), format='csv', verbose=True)
+    #arf = mesh_airfoil(os.path.join(scriptDir, '../data/airfoils/S809.csv'), format='csv', verbose=True)
+
+    #print(arf)
+    #ax = arf.plot(title= 'Original', simple=True, label='Original')
+    #arf.copy().resample_refine(inplace=True, factor_surf=2, factor_te=1).plot(label='Refined', ax=ax, simple=True, sty='o')
+
+    #arf_hr = arf.copy()
+    ##arf_hr.resample_te(n_te=10, inplace=True)
+    #arf_hr.plot(title='High res')
+    #arf_hr.check_mesh(Re=1e6)
+    #print(arf_hr)
+    #arf_cos = arf_hr.resample_cosine(n_surf=11)
+    #arf_cos.check_mesh(Re=1e6)
+    #arf_cos.plot(title='cosine')
+    #arf_cos = arf_cos.resample_te(n_te=30)
+    #arf_cos.plot(title='cosine with TE resampling')
+    #print(arf_cos)
+    #arf_hyp = arf_hr.resample_hyperbolic(n_surf=101)
+    #arf_hyp.plot(title='hyperbolic')
+    #print(arf_hyp)
+
+
 
 
     plt.show()

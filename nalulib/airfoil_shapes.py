@@ -224,6 +224,10 @@ class StandardizedAirfoilShape():
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_refine')
 
     def resample(self, method='', inplace=False, n=None, n_te=None, verbose=False, a_hyp=2.5, **kwargs):
+        """
+        for most methods:
+             -n becomes n per surface
+        """
 
         arf = self
         # --- Auto method
@@ -339,6 +343,48 @@ class StandardizedAirfoilShape():
 
     def plot(self, **kwargs):
         return plot_standardized(self._x, self._y, TE_type=self._TE_TYPE,**kwargs)
+
+    def tri_plot(self, axes=None, legend=True, title='', n_target=30, **kwargs):
+
+        # --- zoom helper ---
+        def zoom_x(ax, x0, dx):
+            mask = (self._x >= x0 - dx) & (self._x <= x0 + dx)
+            ax.set_xlim(x0 - dx, x0 + dx)
+            ax.set_ylim(self._y[mask].min(), self._y[mask].max())
+            ax.set_aspect('auto')  # remove axis equal
+            nn = np.sum(mask)
+            #print('Zoom', nn)
+            return nn
+
+        if axes is None:
+            fig, axes = plt.subplots(1, 3, gridspec_kw={'width_ratios': [1, 5, 1]}, figsize=(18, 4))
+            fig.subplots_adjust(left=0.04, right=0.99, top=0.95, bottom=0.07, hspace=0.20, wspace=0.20)
+        ax1, ax2, ax3 = axes
+        # 
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax1, title=None , legend=False, orient=False, **kwargs)
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax2, title=title, legend=legend,              **kwargs)
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax3, title=None , legend=False, orient=False, **kwargs)
+        ax1.set_xlabel('')
+        ax1.set_ylabel('')
+        ax3.set_xlabel('')
+        ax3.set_ylabel('')
+
+        # --- left and right zooms
+        dx=0.15
+        nn=1000
+        while nn>n_target:
+            dx=dx/2
+            nn = zoom_x(ax1, x0=dx/2, dx=dx)
+        dx=0.15
+        nn=1000
+        while nn>n_target:
+            dx=dx/2
+            nn = zoom_x(ax3, x0=1-dx/2, dx=dx)
+
+        return ax1, ax2, ax3
+
+
+
 
 
 # ---------------------------------------------------------------------------

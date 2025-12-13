@@ -265,6 +265,8 @@ class DataFrameDatabase:
         s+= f" - db.len()         : {num_entries}\n"
         s+= f" - db.configs.keys(): {config_keys}\n"
         s+= f" - db.df_columns    : {df_keys}\n"
-        s+= f" - db.configs:\n {self.configs}\n"
-        s+= f" - useful_functions: select, select_approximate\n"
+        s+= f" - db.configs: <pandas DataFrame>:\n {self.configs}\n"
+        s+= f"useful_functions: \n"
+        s+=  " - newdb = db.select(config) , e.g. config={'key1':'val1'}\n"
+        s+= f" - newdb = db.select_approximate(config)\n"
         return s

@@ -191,6 +191,15 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     # At the end, close the contour
     x, y = close_contour(x, y, force=True, verbose=False)
 
+
+#     fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
+#     fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+#     ax.plot(    , label='')
+#     ax.set_xlabel('')
+#     ax.set_ylabel('')
+#     ax.legend()
+#     plt.show()
+
     return x, y
 
 def airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True):
@@ -904,7 +913,7 @@ def arrow_from_0_passing_1(x, y, L=0.1):
     return dxL, dyL
 
 
-def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=None, simple=False, sty='k.-', TE_type=None):
+def plot_standardized(x, y, first=True, orient=True, label=None, legend=True, title='', ax=None, simple=False, sty='k.-', TE_type=None):
     """ Plot airfoil coordinates if standardized using airfoil_standardize_coords()."""
     airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
 
@@ -947,9 +956,11 @@ def plot_standardized(x, y, first=True, orient=True, label=None, title='', ax=No
 
     ax.set_xlabel('x')
     ax.set_ylabel('y')
-    ax.legend()
+    if legend:
+        ax.legend()
     ax.set_aspect( 'equal' )
-    ax.set_title(title + f' n={len(x)} {TE_type} TE')
+    if title is not None:
+        ax.set_title(title + f' n={len(x)} {TE_type} TE')
     return ax
 
 def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True, verbose=False, simple=False):
