@@ -23,6 +23,7 @@ def nalu_aseq(input_file, aseq=None,
               cluster=None, 
               aoa_ori=None, 
               inlet_name='inlet', outlet_name='outlet', submit=False, center=None, keep_io_side_set=False, raiseError=True, 
+              one_job = False, # If True, only submit one job
               jobname='', hours=None, nodes=None, ntasks=None, mem=None,
               ):
     myprint('Input YAML file', input_file)
@@ -124,27 +125,39 @@ def nalu_aseq(input_file, aseq=None,
     batch_files = []
 
     # --- Create BATCH files
+    base_dir = os.path.dirname(input_file)
+    base_name = os.path.basename(input_file)
+    base, ext = os.path.splitext(base_name)
+    run_batch_file = os.path.join(base_dir, 'submit-'+base+'.sh') 
+
     if cluster == 'local':
-        base_dir = os.path.dirname(input_file)
-        base_name = os.path.basename(input_file)
-        base, ext = os.path.splitext(base_name)
-        run_batch_file = os.path.join(base_dir, 'submit-'+base+'.sh') 
         with open(run_batch_file, 'w', encoding='utf-8') as f:
             for nalu_file in nalu_files:
                 f.write('naluX -i {}\n'.format(nalu_file))
         myprint('[INFO] Commands written to:', run_batch_file)
+        batch_files = [run_batch_file]
     else:
         batch_files = []
-        for ia, (alpha, nalu_file) in enumerate(zip(aseq, nalu_files)):
-            jobname_case = jobname + 'A{:04.1f}'.format(alpha)
-            new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1, 
+        if one_job:
+            jobname_case = jobname + 'AAll'
+            new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_files, output_file = run_batch_file, 
+                                   cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1, 
                                    hours=hours, nodes=nodes, ntasks=ntasks, mem=mem,
                                    sim_dir=base_dir)
             batch_files.append(new_batch)
-            if ia in [0, len(aseq)-1]:
-                myprint('Written Batch File', new_batch, jobname_case)
-            print('   ...') if ia==1 else None
-        print('----------------------------------------------------------------------------')
+
+        else:
+            for ia, (alpha, nalu_file) in enumerate(zip(aseq, nalu_files)):
+                jobname_case = jobname + 'A{:04.1f}'.format(alpha)
+                new_batch = nalu_batch(batch_file_template=batch_file, nalu_input_file=nalu_file, 
+                                       cluster=cluster, verbose=verbose, jobname=jobname_case, mail=ia==len(aseq)-1, 
+                                       hours=hours, nodes=nodes, ntasks=ntasks, mem=mem,
+                                       sim_dir=base_dir)
+                batch_files.append(new_batch)
+                if ia in [0, len(aseq)-1]:
+                    myprint('Written Batch File', new_batch, jobname_case)
+                print('   ...') if ia==1 else None
+            print('----------------------------------------------------------------------------')
 
         # --- Submit BATCH files
         if submit:
