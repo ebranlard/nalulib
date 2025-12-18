@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pickle
 
@@ -9,17 +10,28 @@ class DataFrameDatabase:
         INPUTS:
           - filename (str): Path to a file to load the database from.
           - dfs (list): List of dataframes to initialize the database with.
-          - configs (pd.DataFrame): DataFrame of configurations.
+          - configs (pd.DataFrame or list of dicts): DataFrame of configurations.
           - name (str): Name of the database.
           - validate_columns (bool): If True, ensures all dataframes have the same columns.
         """
+        self.dfs = []
+        self.configs = pd.DataFrame()
+        self._common = {}
         self.validate_columns = validate_columns
+        self.name = name
         if filename is not None:
             self.load(filename)
             return
-        self.dfs = dfs if dfs is not None else []
-        self.configs = configs if configs is not None else pd.DataFrame()
-        self.name = name
+        if dfs is not None:
+            if not isinstance(dfs, list):
+                raise Exception('dfs must be a list of dataframes')
+            self.dfs = dfs 
+        if configs is not None:
+            if isinstance(configs, list):
+                configs=pd.DataFrame(configs)
+            if not isinstance(configs, pd.DataFrame):
+                raise Exception('configs must be a dataframe')
+            self.configs = configs 
 
     def insert(self, config, df):
         """
@@ -40,10 +52,22 @@ class DataFrameDatabase:
         if self.validate_columns and self.dfs:
             if not all(df.columns == self.dfs[0].columns):
                 raise ValueError("All dataframes must have the same columns when validate_columns is True.")
+
+        if not isinstance(df, pd.DataFrame):
+            raise Exception('df must be DataFrame')
+
         self.dfs.append(df)
         config_index = len(self.dfs) - 1
-        config_df = pd.DataFrame([config], index=[config_index])
+        try:
+            config_df = pd.DataFrame([config], index=[config_index])
+        except:
+            import pdb; pdb.set_trace()
         self.configs = pd.concat([self.configs, config_df])
+
+    def insert_multiple(self, configs, dfs):
+        for c, df in zip(configs, dfs):
+            self.insert(c, df)
+
 
     def save(self, filename):
         """
@@ -62,7 +86,12 @@ class DataFrameDatabase:
             self.configs = data['configs']
             self.name = data['name']
 
-    def _newdb(self, selected_configs, selected_indices):
+    def copy(self):
+        dfs = [df.copy() for df in self.dfs]
+        configs = self.configs.copy()
+        return DataFrameDatabase(name=self.name, dfs=dfs, configs=configs)
+
+    def _newdb(self, selected_configs=None, selected_indices=None):
         selected_configs = selected_configs.reset_index(drop=True) # New index
         new_db = DataFrameDatabase(name=self.name)
         new_db.dfs = [self.dfs[i] for i in selected_indices]
@@ -132,6 +161,29 @@ class DataFrameDatabase:
         selected_configs = self.configs[mask]
         selected_indices = selected_configs.index.tolist()
         return self._newdb(selected_configs, selected_indices)
+
+    def select_closest(self, key, value):
+        """
+        Selects rows from the database where the given key is the closest to the value provided.
+        INPUTS:
+          - key (str): The column name to filter on.
+          - value (float): The target value to filter around.
+
+        OUTPUTS:
+          - DataFrameDatabase: A new database containing the filtered rows.
+
+        EXAMPLE:
+          # Select rows where Re is approximately 0.8 with a tolerance of 0.1
+          filtered_db = db.select_closest('Re', 0.8)
+        """
+        if key not in self.configs.columns:
+            raise KeyError(f"Key '{key}' not found in configs.")
+        values = self.configs[key].values
+        i = np.argmin(abs(values-value))
+        val = values[i]
+        #print('Value', value, 'closest', val)
+        return self.select({key:val})
+
     
     def select_minor(self, key, value):
       """
@@ -186,6 +238,18 @@ class DataFrameDatabase:
 
         return new_db
 
+    def concat(self, db, inplace=True):
+        if inplace:
+            db_loc = self
+        else:
+            db_loc = self.copy()
+            db_loc.name+='_'+db.name
+            for c, df in db:
+                db_loc.insert(c, df)
+        return db_loc
+
+
+
     def simplify(self):
         """
         Returns a new database with the same dataframes but a simplified configs dataframe.
@@ -194,10 +258,10 @@ class DataFrameDatabase:
         OUTPUTS:
           - DataFrameDatabase: A new database with simplified configs.
         """
-        # Identify columns with constant values
-        constant_columns = [col for col in self.configs.columns if self.configs[col].nunique() == 1]
+        ## Identify columns with constant values
+        constant_columns = [col for col in self.configs.columns if self.configs[col].nunique(dropna=False) == 1]
 
-        # Extract the common config (constant values)
+        ## Extract the common config (constant values)
         common_config = {col: self.configs[col].iloc[0] for col in constant_columns}
 
         # Drop constant columns
@@ -207,8 +271,23 @@ class DataFrameDatabase:
         new_db = DataFrameDatabase(name=self.name)
         new_db.dfs = self.dfs.copy()
         new_db.configs = simplified_configs
+        new_db._common = self._common | common_config
 
-        return new_db, common_config
+        return new_db
+        #, common_config
+
+    @property
+    def common(self):
+        return self._common
+
+    @property
+    def common_config(self):
+        # Identify columns with constant values
+        constant_columns = [col for col in self.configs.columns if self.configs[col].nunique(dropna=False) == 1]
+        # Extract the common config (constant values)
+        common_config = {col: self.configs[col].iloc[0] for col in constant_columns}
+        return common_config
+
 
     @property
     def configs_dict(self):
@@ -218,6 +297,9 @@ class DataFrameDatabase:
     def df_columns(self):
         df_keys = list(self.dfs[0].columns) if len(self)>0 else []
         return df_keys
+
+    def keys(self):
+        return self.configs.keys()
 
     def __getitem__(self, index):
         """
@@ -254,6 +336,28 @@ class DataFrameDatabase:
             c, df = self[0]
         return c, df
 
+    def toDict(self, key=None):
+        """ 
+        return a dictionary 
+          {v:df}
+        only if there is one column
+        """
+        d = {}
+        if key is None:
+            if len(self.keys())!=1:
+                raise Exception(f'toDict only works if a single column is present in the configs (e.g. after running simplify). Currently there are {len(self.keys())} columns.')
+            k = self.keys()[0]
+            for c, df in self:
+                d[c[k]] = df
+        vals = self.configs[key]
+        if len(vals.unique()) != len(vals):
+            raise Exception(f'toDict only works if the values of the column {key} are unique')
+        for v, (c, df) in zip(vals, self):
+            d[v] = df
+        return d
+
+
+
     def __repr__(self):
         """
         Returns a string representation of the database with basic information.
@@ -265,8 +369,14 @@ class DataFrameDatabase:
         s+= f" - db.len()         : {num_entries}\n"
         s+= f" - db.configs.keys(): {config_keys}\n"
         s+= f" - db.df_columns    : {df_keys}\n"
+        s+= f" * db.common:         {self.common}\n"
+        s+= f" * db.common_config:  {self.common_config}\n"
         s+= f" - db.configs: <pandas DataFrame>:\n {self.configs}\n"
         s+= f"useful_functions: \n"
         s+=  " - newdb = db.select(config) , e.g. config={'key1':'val1'}\n"
-        s+= f" - newdb = db.select_approximate(config)\n"
+        s+= f" - newdb = db.select_approximate(key, value, tol)\n"
+        s+= f" - c, df  = db.get_singelton(config)\n"
+        s+= f"useful_usage: \n"
+        s+=  "   c, df = db[0]\n"
+        s+=  "   for config, df in db:"
         return s

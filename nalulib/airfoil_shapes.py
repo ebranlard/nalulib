@@ -235,7 +235,8 @@ class StandardizedAirfoilShape():
             method = 'hyperbolic'
             n = n if n is not None else GUIDELINES_N_DS_REC
             if self._TE_TYPE == 'blunt':
-                n_te = GUIDELINES_N_TE_BLUNT_REC
+                if n_te is None:
+                    n_te = GUIDELINES_N_TE_BLUNT_REC
         if verbose:
             print('Resampling airfoil with method: {}, n: {}, n_te: {}'.format(method, n, n_te))
 

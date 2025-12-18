@@ -475,11 +475,90 @@ class NALUInputFile(YamlEditor):
         return np.nan
 
     @viscosity.setter
-    def viscosity(self, new_viscosity):
+    def viscosity(self, value):
         for realm in self.data['realms']:
             for specs in realm['material_properties']['specifications']:
                 if specs['name'] == 'viscosity':
-                    specs['value'] = new_viscosity
+                    specs['value'] = value
+
+    # --- Turbulent KE
+    @property
+    def IC_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'turbulent_ke' in ic['value']:
+                    return ic['value']['turbulent_ke']
+                print(ic)
+    @IC_turbulent_ke.setter
+    def IC_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'turbulent_ke' in ic['value']:
+                    ic['value']['turbulent_ke'] = value
+    @property
+    def inflow_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    return bc['inflow_user_data']['turbulent_ke']
+    @inflow_turbulent_ke.setter
+    def inflow_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    bc['inflow_user_data']['turbulent_ke'] = value
+    @property
+    def outflow_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    return bc['open_user_data']['turbulent_ke']
+    @outflow_turbulent_ke.setter
+    def outflow_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    bc['open_user_data']['turbulent_ke'] = value
+
+    # --- Specific dissipation rate
+    @property
+    def IC_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'specific_dissipation_rate' in ic['value']:
+                    return ic['value']['specific_dissipation_rate']
+                print(ic)
+    @IC_specific_dissipation_rate.setter
+    def IC_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'specific_dissipation_rate' in ic['value']:
+                    ic['value']['specific_dissipation_rate'] = value
+    @property
+    def inflow_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    return bc['inflow_user_data']['specific_dissipation_rate']
+    @inflow_specific_dissipation_rate.setter
+    def inflow_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    bc['inflow_user_data']['specific_dissipation_rate'] = value
+    @property
+    def outflow_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    return bc['open_user_data']['specific_dissipation_rate']
+    @outflow_specific_dissipation_rate.setter
+    def outflow_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    bc['open_user_data']['specific_dissipation_rate'] = value
+
 
     @property
     def turbulence_model(self):
@@ -857,15 +936,37 @@ def nalu_input_CLI():
     nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler, plot_motion=args.plot_motion)  
 
 if __name__ == '__main__':
+    yml = NALUInputFile('../../nalu-cases/du00-w-212/static_polar_2d_rans/input.yaml', reader='yaml')
+    print(yml.inflow_turbulent_ke)
+    print(yml.outflow_turbulent_ke)
+    print(yml.IC_turbulent_ke)
+    yml.inflow_turbulent_ke=0.1
+    yml.outflow_turbulent_ke=0.1
+    yml.IC_turbulent_ke =0.1
+    print(yml.inflow_turbulent_ke)
+    print(yml.outflow_turbulent_ke)
+    print(yml.IC_turbulent_ke)
+
+    print(yml.inflow_specific_dissipation_rate)
+    print(yml.outflow_specific_dissipation_rate)
+    print(yml.IC_specific_dissipation_rate)
+    yml.inflow_specific_dissipation_rate=0.5
+    yml.outflow_specific_dissipation_rate=0.5
+    yml.IC_specific_dissipation_rate =0.5
+    print(yml.inflow_specific_dissipation_rate)
+    print(yml.outflow_specific_dissipation_rate)
+    print(yml.IC_specific_dissipation_rate)
+
+
 
     ##yml = NALUInputFile('input2.yaml')
-    yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
+    #yml = NALUInputFile('_mesh_motion/input_restart_simpler.yaml')
     #yml.set_sine_motion(A=10, f=1, n_periods=1, t_steady=20, DOF='pitch', plot=True, irealm=1)
-    yml.set_step_motion(A=2, t_steady=0.5, DOF='pitch', plot=True, irealm=1)
-    yml.write('_DUMMY.yml')
+    #yml.set_step_motion(A=2, t_steady=0.5, DOF='pitch', plot=True, irealm=1)
+    #yml.write('_DUMMY.yml')
     ##yml = NALUInputFile('_mesh_motion/input_restart.yaml')
     #yml.extract_mesh_motion(plot=True, export=True)
     #yml.print()
     #pass
 
-    nalu_input_CLI()
+    #nalu_input_CLI()

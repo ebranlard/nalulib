@@ -69,8 +69,8 @@ def exo_zextrude(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
             print(f"[INFO] Side set suffix inferred as: {ss_suffix}.  If this is undesired, use --ss_suffix ''")
         else:
             ss_suffix=''
-    else:
-        ss_suffix=''
+    #else:
+    #    ss_suffix=''
 
     # --- Extrude the mesh
     with Timer('Extruding mesh', silent=not profiler, writeBefore=True):
