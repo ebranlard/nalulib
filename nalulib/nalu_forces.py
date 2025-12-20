@@ -40,7 +40,9 @@ def plot_polar_df(axes, df, sty, label=None, c=None):
 
 
 
-def plot_polars(polars, verbose=False):
+def plot_polars(polars, verbose=False, 
+                cfd_sty='-', cfd_c='k'
+                ):
     fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
     fig.subplots_adjust(left=0.08, right=0.99, top=0.94, bottom=0.11, hspace=0.20, wspace=0.20)
 
@@ -74,7 +76,11 @@ def plot_polars(polars, verbose=False):
             elif 'grit' in k.lower():
                 sty='d'; c='k'
             elif k.lower()=='cfd':
-                sty='-'; c='k'
+                sty=cfd_sty; c=cfd_c;
+            elif 'cfd3d' in k.lower():
+                sty='+-'
+                kcol+=1
+                c=COLRS[kcol]
             elif 'cfd' in k.lower():
                 sty='--'
                 kcol+=1
@@ -85,7 +91,7 @@ def plot_polars(polars, verbose=False):
             if len(pol)==1:
                 sty='o'
             if verbose:
-                print(f'[INFO] Polar {k:15s}: ', pol.keys(), len(pol), sty, c)
+                print(f'[INFO] Plot Polar: label={k:15s}: ', len(pol), sty, c)
             plot_polar_df(axes, df2, sty=sty, label=k, c=c)
 
 
@@ -152,7 +158,7 @@ def reference_force(Aref=1, rho=1.2, nu=9e-6, U0=None, yaml_file='input.yaml', a
 
 
 
-def read_forces(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fin=None):
+def read_forces_csv(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fin=None):
     df0 = CSVFile(input_file).toDataFrame()
     df = df0.copy()
 
@@ -174,6 +180,9 @@ def read_forces(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fi
 
 
 def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tmin=None, tmax=None):
+    """ 
+    Read forces based on a yaml file, concatenate them if necessary
+    """
     yml = None
     Fin = 1.0
     _, ext = os.path.splitext(yaml_file)
@@ -191,7 +200,7 @@ def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tm
                 csv_files.append(force_file)
 
     for i, csv_file in enumerate(csv_files):
-        df = read_forces(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+        df = read_forces_csv(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
         if i==0:
             df_prev = df
         else:
@@ -206,6 +215,8 @@ def input_files_from_patterns(patterns):
     if not isinstance(patterns, list):
         patterns=[patterns]
     input_files = []
+    if len(patterns)==0:
+        raise Exception('Nalu-forces: Empty list of patterns provided')
     for pattern in patterns:
         if "*" in pattern:
             input_files_loc = glob.glob(pattern)
@@ -231,7 +242,9 @@ def input_files_from_patterns(patterns):
 
 
 
-def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbose=False, polar_out=None, polars=None, plot=False, use_ss=False):
+def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbose=False, polar_out=None, 
+                  use_ss=False,
+                  polars=None, plot=False, cfd_sty='-', cfd_c='k'):
     """ 
     INPUTS:
      - input_pattern: either:
@@ -263,7 +276,7 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
             print(f' {input_file} ')
         try:
             if input_is_csv:
-                df = read_forces(input_file, verbose=verbose, Fin=Fin)
+                df = read_forces_csv(input_file, verbose=verbose, Fin=Fin)
             else:
                 df, yml, Fin, U0, rho, nu = read_forces_yaml(input_file, Aref=Aref, dimensionless=True, verbose=verbose)
         except Exception as e:
@@ -280,6 +293,10 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
     # --- 
     if use_ss:
         t_onset_default = (dfss['t_trans1'].mean()+ dfss['t_trans2'].mean())/2
+        if np.isnan(t_onset_default):
+            print('[WARN] No steady-state ever detected, setting t_onset to None')
+            t_onset_default=None
+            use_ss =None
     else:
         t_onset_default = None
 
@@ -324,8 +341,10 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
 
     # --- Plot polar
     if plot:
+        if polars is None:
+            polars={}
         polars = {'cfd': dfp, **polars}
-        fig = plot_polars(polars)
+        fig = plot_polars(polars, cfd_sty=cfd_sty, cfd_c=cfd_c)
     return dfp, dfss, fig
 
 

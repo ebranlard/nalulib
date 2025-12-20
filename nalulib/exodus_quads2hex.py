@@ -219,7 +219,7 @@ def exo_zextrude(input_file, output_file=None, nSpan=10, zSpan=4.0, zoffset=0.0,
                 print(f"[WARN] Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-ss_wing_pp. Deleting this side set.")
                 delete_keys.append(side_set_id)
             else:
-                raise ValueError(f"Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-")
+                raise ValueError(f"Side set {side_set_id} ({side_set_data['name']}) is empty after extrusion. Try with --no-ss_wing_pp")
     for key in delete_keys:
         del new_side_sets[key]
 

@@ -106,7 +106,9 @@ def inlet_outlet_angle_segments(side_sets, node_coords, center, elem_to_face_nod
 def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None, 
                   inlet_start=None, inlet_span=None, outlet_start=None, keep_io_side_set=False, 
                   inlet_name='inlet', outlet_name='outlet',
-                  verbose=False, profiler=False, debug=False):
+                  verbose=False, profiler=False, debug=False,
+                  translation_after=(0,0) # Translation after rotation has been done!
+               ):
     """
     Rotate an Exodus file's node coordinates and adjust side sets.
 
@@ -229,6 +231,10 @@ def exo_rotate(input_file, output_file, angle, center=(0,0), angle_center=None,
                             if side_set_data["name"] == new_side_set["name"]:
                                 side_sets[side_set_id] = new_side_set
                                 break
+
+        # --- Translate after the rotation
+        rotated_coords[:,0] += translation_after[0]
+        rotated_coords[:,1] += translation_after[1]
 
         # Write rotated mesh to a new Exodus file
         if output_file is None:

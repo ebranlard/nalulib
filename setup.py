@@ -18,6 +18,7 @@ setup(
             'exo-zextrude=nalulib.cli:exo_zextrude_CLI',
             'nalu-aseq=nalulib.cli:nalu_aseq_CLI',
             'nalu-forces = nalulib.nalu_forces:nalu_forces_CLI',
+            'nalu-forces-combine = nalulib.nalu_forces_combine:nalu_forces_combine_CLI',
             'nalu-input=nalulib.cli:nalu_input_CLI',
             'nalu-restart=nalulib.cli:nalu_restart',
             'gmsh2exo=nalulib.cli:gmsh2exo_CLI',

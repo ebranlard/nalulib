@@ -664,6 +664,10 @@ class NALUInputFile(YamlEditor):
 
 
     def set_sine_motion(self, A, f, n_periods, t_steady=0, dt=None, DOF='pitch', plot=False, irealm=0):
+        """
+        Input:
+         - A [deg]
+        """
         if dt is None:
             dt = self.time_dict['dt']
         t, x, y, theta = sine_motion(A, f, n_periods, t_steady, dt, DOF=DOF)
