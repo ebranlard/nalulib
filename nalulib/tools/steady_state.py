@@ -1,7 +1,8 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.signal import correlate, find_peaks
 from scipy import signal
+
+import nalulib.pyplot as plt
 
 
 class SignalTooShortException(Exception): pass

@@ -9,9 +9,9 @@ import numpy as np
 
 # Local
 import nalulib.pyplot as plt
-from nalulib.weio.csv_file import CSVFile
 from nalulib.nalu_input import NALUInputFile
-from nalulib.tools.steady_state import *
+from nalulib.tools.steady_state import analyze_steady_state
+from nalulib.weio.csv_file import CSVFile
 
 
 def standardize_polar_df(df):
@@ -203,7 +203,6 @@ def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tm
         if 'post_processing' in realm:
             for pp in realm['post_processing']:
                 force_file = os.path.join(basedir, pp['output_file_name'])
-                print(force_file)
                 csv_files.append(force_file)
 
     for i, csv_file in enumerate(csv_files):
@@ -215,7 +214,7 @@ def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tm
             df.loc[:, df.columns != 'Time'] = df.drop(columns='Time') + df_prev.drop(columns='Time')
             df['Time'] = (df['Time'] + df_prev['Time']) / 2
 
-    return df, Fin, yml, U0, rho, nu
+    return df, Fin, yml, U0, rho, nu, csv_files
 
 
 def input_files_from_patterns(patterns):
@@ -265,7 +264,10 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
     # --- Input files
     input_files, input_is_csv = input_files_from_patterns(input_pattern)
     if verbose:
-        print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
+        if len(input_files)==1:
+            print('[INFO] Input file provided ({}):'.format(len(input_files)), input_files[0])
+        else:
+            print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
 
     # Open Yaml file to get reference values
     if input_is_csv:
@@ -285,7 +287,7 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
             if input_is_csv:
                 df = read_forces_csv(input_file, verbose=verbose, Fin=Fin)
             else:
-                df, yml, Fin, U0, rho, nu = read_forces_yaml(input_file, Aref=Aref, dimensionless=True, verbose=verbose)
+                df, Fin, yml, U0, rho, nu, csv_files = read_forces_yaml(input_file, Aref=Aref, dimensionless=True, verbose=verbose)
         except Exception as e:
             print(f"[FAIL] Error reading {input_file}: {e}")
             continue
@@ -363,7 +365,7 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
 
 def nalu_forces(input_files='forces.csv', tmin=None, tmax=None, 
                 chord=1, rho=None, nu=None, U0=None, dz=1, 
-                yaml_file='input.yaml', 
+                yaml_file=None,
                 polar_ref=None,
                 polar_exp=None,
                 polar_out='polar.csv',
@@ -386,11 +388,15 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
         input_files = [input_files]
     patterns = input_files 
     input_files, input_is_csv = input_files_from_patterns(patterns)
-    print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
+    if len(input_files)==1:
+        print('[INFO] Input file provided ({}):'.format(len(input_files)), input_files[0])
+    else:
+        print('[INFO] Input files provided ({}):'.format(len(input_files)), input_files[0], '...', input_files[-1])
 
     # --- Are we dealing with csv or yaml files
     if not input_is_csv:
-        print('[INFO] Input files are yaml files instead of csv files, overridding yaml_file')
+        if yaml_file is not None:
+            print('[INFO] Input files are yaml files instead of CSV files, overidding yaml_file')
         yaml_file = input_files [0]
 
     dft = None
@@ -404,10 +410,15 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
             if input_is_csv:
                 Fin, U0, rho, nu, yml = reference_force(Aref=Aref, rho=rho, nu=nu, U0=U0, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
                 dft, yml = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+                sInfo =  'YML  : {}\n'.format(yaml_file)
+                sInfo += 'CSV  : {}'.format(input_file)
             else:
-                dft, yml, Fin, U0, rho, nu = read_forces_yaml(input_file, Aref=Aref, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+                dft, Fin, yml, U0, rho, nu, csv_files = read_forces_yaml(input_file, Aref=Aref, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+                sInfo  = 'YML  : {}\n'.format(input_file)
+                sInfo += 'CSV  : {}'.format(csv_files)
 
             if verbose:
+                print(sInfo)
                 print('chord: {:9.3f}  '.format(chord))
                 print('dz   : {:9.3f}  '.format(dz))
                 print('U0   : {:9.3f}  '.format(U0))
@@ -415,10 +426,8 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
                 print('nu   : {:9.3e}  '.format(nu))
                 print('Re   : {:9.3f} Million'.format(U0 * chord /(nu*1e6)))
                 print('Fref : {:9.3f} [N]'.format(Fin))
-
-            if verbose:
-                print("Filename:", input_file)
-                print('Final values: {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(FC, dft['Cx'].values[-1], FC, dft['Cy'].values[-1]))
+                print('nStep: {:d}'.format(len(dft)))
+                print('Last : Time[-1]={:.3f}, {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(dft['Time'].values[-1], FC, dft['Cx'].values[-1], FC, dft['Cy'].values[-1]))
 
             # --- Plot time series
             if plot:
@@ -431,6 +440,8 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
                 ax.set_ylabel(label)
                 ax.set_xlabel('Time [s]')
                 ax.legend()
+
+
 
     if polar_ref is None and len(input_files) == 1:
         # If no polar reference is provided, we only plot the time series
@@ -459,7 +470,7 @@ def nalu_forces_CLI():
     parser.add_argument('--no-auto', dest='auto', action='store_false', help='Do not auto-read velocity, density, etc from YAML')
     parser.add_argument('--forces', dest='dimensionless', action='store_false', help='Plot forces instead of coefficients')
     parser.add_argument('--var', type=str, default='xy', help='Which force components to plot (x, y, or xy)')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     parser.add_argument('--no-plot', action='store_true', help='Do not plot results')
     args = parser.parse_args()
 
