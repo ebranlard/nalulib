@@ -18,6 +18,6 @@ if __name__ == '__main__':
 
     fig, ax= plt.subplots(1, 1)
 
-    ax.plot([0,1], [0,1], '-', label='Hello')
-    ax.plot([0,1], [-1,0],'-', label='You')
+    ax.plot([0,1], [0,1],  'o', label='Hello')
+    ax.plot([0,1], [-1,0], '+', label='You')
     plt.show()

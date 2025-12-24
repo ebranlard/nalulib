@@ -612,7 +612,7 @@ class NALUInputFile(YamlEditor):
     def motion(self):
         return self.extract_mesh_motion()
 
-    def extract_mesh_motion(self, plot=False, csv_file=None, export=False):
+    def extract_mesh_motion(self, plot=False, csv_file=None, export=False, xlim=None, ylim=None):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
         data = self.data
 
@@ -650,9 +650,14 @@ class NALUInputFile(YamlEditor):
             ax.plot(df['Time_[s]'].values, df['y'].values, label="y [m]")
             ax.plot(df['Time_[s]'].values, df['ox'].values, "--", label="ox [m]")
             ax.plot(df['Time_[s]'].values, df['oy'].values, "--", label="oy [m]")
-            ax.set_xlabel("t")
-            ax.set_ylabel("Oscillation")
-            ax.set_ylim([-15, 15])
+            ax.set_xlabel("t [s]")
+            ax.set_ylabel("Motion")
+            if xlim is not None:
+                print('>>> xlim', xlim)
+                ax.set_xlim(xlim)
+            if ylim is not None:
+                print('>>> ylim', ylim)
+                ax.set_ylim(ylim)
             plt.grid()
             plt.legend()
             plt.show()
@@ -892,7 +897,8 @@ def generate_mesh_motion(t, x, y, theta, plot=False):
 
 
 def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False, reader='yaml', 
-               plot_motion=False, verbose=False, profiler=False):
+               plot_motion=False, xlim=None, ylim=None, 
+               verbose=False, profiler=False):
     """
     Main function to handle NALU input file operations.
     :param input_file: Path to the NALU YAML input file.
@@ -921,7 +927,7 @@ def nalu_input(input_file='input.yaml', sort=False, overwrite=False, check=False
             print(f"[INFO] Sorted file written to: {outpath}   (otherwise use --overwrite).")
             #print(f"       yaml reader: {yml.reader}")
     if plot_motion:
-        yml.extract_mesh_motion(plot=True)
+        yml.extract_mesh_motion(plot=True, xlim=xlim, ylim=ylim)
 
 
 def nalu_input_CLI():
@@ -934,10 +940,12 @@ def nalu_input_CLI():
     parser.add_argument("--reader", default='yaml', help="Specify reader: 'yaml' or 'ruamel' (default: ruamel). Note: yaml sorts but looses comments. Ruamel sorts the first two levels only.", choices=['yaml', 'ruamel'])
     parser.add_argument("--profiler", action="store_true", help="Enable profiling with timers.")
     parser.add_argument("--plot-motion", action="store_true", help="Extract and Plot mesh motion")
+    parser.add_argument("--xlim"       , type=float, nargs=2, default=None, help="xlim for plot_motion (xmin,xmax). Default is None.")
+    parser.add_argument("--ylim"       , type=float, nargs=2, default=(-1, 1), help="ylim for plot_motion (ymin,ymax). Default is (-1,1).")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
 
-    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler, plot_motion=args.plot_motion)  
+    nalu_input(input_file=args.input, sort=args.sort, overwrite=args.overwrite, check=not args.no_check, verbose=args.verbose, reader=args.reader, profiler=args.profiler, plot_motion=args.plot_motion, xlim=args.xlim, ylim=args.ylim)  
 
 if __name__ == '__main__':
     yml = NALUInputFile('../../nalu-cases/du00-w-212/static_polar_2d_rans/input.yaml', reader='yaml')

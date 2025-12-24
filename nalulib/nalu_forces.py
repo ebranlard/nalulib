@@ -29,20 +29,20 @@ def standardize_polar_df(df):
     #print('Cols', df.columns.values)
     return df
 
-def plot_polar_df(axes, df, sty, label=None, c=None):
-    axes[0].plot(df['Alpha'], df['Cl'], sty, c=c, label=(label if label is not None else ''))
-    axes[0].plot(df['Alpha'], df['Cd'], sty, c=c, label=None)
+def plot_polar_df(axes, df, ls='-', label=None, c=None, marker=None):
+    axes[0].plot(df['Alpha'], df['Cl'], ls=ls, marker=marker, c=c, label=(label if label is not None else ''))
+    axes[0].plot(df['Alpha'], df['Cd'], ls=ls, marker=marker, c=c, label=None)
 #     if sty=='ko' or sty=='kd':
 #     else:
 #         axes[0].plot(df['Alpha'], df['Cl'], sty, label='Cl '+ (label if label is not None else ''))
 #         axes[0].plot(df['Alpha'], df['Cd'], sty, label='Cd '+ (label if label is not None else ''))
-    axes[1].plot(df['Cd']   , df['Cl'], sty, c=c, label=label)
+    axes[1].plot(df['Cd']   , df['Cl'], ls=ls, marker=marker, c=c, label=label)
 
 
 
 
 def plot_polars(polars, verbose=False, 
-                cfd_sty='-', cfd_c='k'
+                cfd_ls='-', cfd_c='k', cfd_m=None,
                 ):
     fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
     fig.subplots_adjust(left=0.08, right=0.99, top=0.94, bottom=0.11, hspace=0.20, wspace=0.20)
@@ -51,7 +51,10 @@ def plot_polars(polars, verbose=False,
         cfd_done=False
         exp_done=False
 
-        COLRS=plt.rcParams['axes.prop_cycle'].by_key()['color']
+        try:
+            COLRS=plt.rcParams['axes.prop_cycle'].by_key()['color']
+        except:
+            COLRS=['b','r','g','k']
         kcol=-1
         for k,pol in polars.items():
             sty='-'
@@ -71,29 +74,33 @@ def plot_polars(polars, verbose=False,
             else:
                 raise NotImplementedError(type(pol))
             # --- TODO ugly logic here
+            ls='-'
+            m=None
             if 'exp' in k.lower() and not exp_done:
-                sty='o'; c='k'
+                m='o'; c='k'; ls=''
                 exp_done=True
             elif 'grit' in k.lower():
-                sty='d'; c='k'
+                m='d'; c='k'; ls=''
             elif k.lower()=='cfd':
-                sty=cfd_sty; c=cfd_c;
+                m=cfd_m; c=cfd_c; ls=cfd_ls;
+
             elif 'cfd3d' in k.lower():
-                sty='+-'
+                m='+'; ls='-'
                 kcol+=1
                 c=COLRS[kcol]
             elif 'cfd' in k.lower():
-                sty='--'
+                ls='--'
                 kcol+=1
                 c=COLRS[kcol]
             else:
                 kcol+=1
                 c=COLRS[kcol]
             if len(pol)==1:
-                sty='o'
+                m='o'; ls=''
+
             if verbose:
-                print(f'[INFO] Plot Polar: label={k:15s}: ', len(pol), sty, c)
-            plot_polar_df(axes, df2, sty=sty, label=k, c=c)
+                print(f'[INFO] Plot Polar n=len(pol), label={k:15s}, ls={ls}, m={m} c={c}')
+            plot_polar_df(axes, df2, marker=m, label=k, c=c, ls=ls)
 
 
     axes[0].set_xlabel('Angle of Attack (deg)')
@@ -248,9 +255,9 @@ def input_files_from_patterns(patterns):
 
 
 
-def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbose=False, polar_out=None, 
+def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, verbose=False, polar_out=None, 
                   use_ss=False,
-                  polars=None, plot=False, cfd_sty='-', cfd_c='k'):
+                  polars=None, plot=False, cfd_m = '', cfd_ls='-', cfd_c='k'):
     """ 
     INPUTS:
      - input_pattern: either:
@@ -259,6 +266,8 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
     """
     dfp = None
     fig = None
+    if dz is None:
+        dz=1 # TODO automatic from yaml
     Aref = chord*dz
 
     # --- Input files
@@ -357,14 +366,14 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
         if polars is None:
             polars={}
         polars = {'cfd': dfp, **polars}
-        fig = plot_polars(polars, cfd_sty=cfd_sty, cfd_c=cfd_c)
+        fig = plot_polars(polars, cfd_ls=cfd_ls, cfd_c=cfd_c, cfd_m=cfd_m, verbose=verbose)
     return dfp, dfss, fig
 
 
 
 
 def nalu_forces(input_files='forces.csv', tmin=None, tmax=None, 
-                chord=1, rho=None, nu=None, U0=None, dz=1, 
+                chord=1, rho=None, nu=None, U0=None, dz=None, 
                 yaml_file=None,
                 polar_ref=None,
                 polar_exp=None,
@@ -373,7 +382,7 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
                 dimensionless=True,
                 var='xy',
                 verbose=False,
-                plot=True
+                plot=True, cfd_ls='-'
                 ):
 
 
@@ -381,6 +390,9 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
     FC, label= 'F', 'Forces [N]'
     if dimensionless:
         FC, label='C' , 'Coefficient [-]'
+
+    if dz is None:
+        dz=1  # TODO
     Aref = chord*dz
 
     # --- Are we dealing with multiple files or one file?
@@ -434,9 +446,9 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
                 figt, ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,5.8))
                 figt.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
                 if 'x' in var:
-                    plt.plot(dft['Time'].values, dft['Cx'].values, label=FC+'x')
+                    ax.plot(dft['Time'].values, dft['Cx'].values, label=FC+'x')
                 if 'y' in var:
-                    plt.plot(dft['Time'].values, dft['Cy'].values, label=FC+'y')
+                    ax.plot(dft['Time'].values, dft['Cy'].values, label=FC+'y')
                 ax.set_ylabel(label)
                 ax.set_xlabel('Time [s]')
                 ax.legend()
@@ -448,21 +460,22 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
         return
 
     # ---
-    dfp, dfss, figp = polar_postpro(yaml_file, patterns, tmin=tmin, chord=chord, dz=dz, verbose=verbose, polar_out=polar_out, polars={'ref':polar_ref, 'exp':polar_exp}, plot=plot)
+    dfp, dfss, figp = polar_postpro(patterns, yaml_file, tmin=tmin, chord=chord, dz=dz, verbose=verbose, polar_out=polar_out, polars={'ref':polar_ref, 'exp':polar_exp}, plot=plot, cfd_ls=cfd_ls)
 
     return dfp, figp, dft, figt
 
 
 def nalu_forces_CLI():
     parser = argparse.ArgumentParser(description="Plot Nalu forces from a CSV file, optionally dimensionless.")
-    parser.add_argument('input', type=str, nargs='*', default='forces*.csv', help='Force file(s) from nalu-wind, or glob ("forces_aoa*.csv")')
+    parser.add_argument('input', type=str, nargs='*', default='*.yaml', help='Force file(s) or yaml input file from nalu-wind, or glob ("forces_aoa*.csv" or "input*.yaml"). Default is *.yaml')
     parser.add_argument('--tmin', type=float, default=None, help='Minimum time')
     parser.add_argument('--tmax', type=float, default=None, help='Maximum time')
     parser.add_argument('--chord', type=float, default=1.0, help='Airfoil chord')
     parser.add_argument('--rho', type=float, default=None, help='Density (overrides YAML)')
     parser.add_argument('--nu', type=float, default=None, help='Kinematic viscosity (overrides YAML)')
     parser.add_argument('--U0', type=float, default=None, help='Reference velocity (overrides YAML)')
-    parser.add_argument('--dz', type=float, default=1.0, help='Spanwise thickness')
+    parser.add_argument('--dz', type=float, default=None, help='Spanwise thickness. Default is None (auto, 1 or 4 if "pp")')
+    parser.add_argument('--scatter', action='store_true', help='Plot scatter instead of lines')
     parser.add_argument('--yaml', type=str, default='input.yaml', help='NALU input YAML file for auto properties')
     parser.add_argument('--polar-exp', type=str, default=None, help='CSV file with experimental polar data, alpha, Cl, Cd, Cm')
     parser.add_argument('--polar-ref', type=str, default=None, help='CSV file with reference polar data, alpha, Cl, Cd, Cm')
@@ -473,6 +486,11 @@ def nalu_forces_CLI():
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     parser.add_argument('--no-plot', action='store_true', help='Do not plot results')
     args = parser.parse_args()
+
+    if args.scatter:
+        ls=''
+    else:
+        ls='-'
 
     nalu_forces(
         input_files=args.input,
@@ -492,6 +510,7 @@ def nalu_forces_CLI():
         var=args.var,
         verbose=args.verbose,
         plot=not args.no_plot,
+        cfd_ls = ls,
     )
     plt.show()
 

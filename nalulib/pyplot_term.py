@@ -11,6 +11,8 @@ globals()['subplots'] = subplots
 MARKERS=['dot', 'cross', '+', 'fhd', 'braille', 'sd']
 COLORS=['blue', 'orange', 'green', 'red', 'gray','magenta', 'cyan']
 
+MARKERS_CONV={'o':'dot', 'x':'cross', '+':'+', 'd':'fhd', '.':'braille', 's':'sd', '':'dot', None:'dot'}
+
 def get_plotext_default_size():
     try:
         size = os.get_terminal_size()
@@ -27,9 +29,10 @@ class DummyAx():
         self.iPlot=0
         self.ia=ia
         self.ib=ib
-        pass
+        self.xlim=[np.inf,-np.inf]
+        self.ylim=[np.inf,-np.inf]
 
-    def plot(self, x, y, *args, color=None, ms=None, markerfacecolor=None, markersize=None, **kwargs):
+    def plot(self, x, y, *args, ls=None, marker=None, color=None, c=None, ms=None, markerfacecolor=None, markersize=None, **kwargs):
         if len(args)==1:
             sty = args[0]
             #print('>>> sty', sty)
@@ -40,6 +43,7 @@ class DummyAx():
         x = np.asarray(x)
         y = np.asarray(y)
 
+        #print(f'pyplot_term {self.iPlot} ls={ls}, color={color}, c={c}, ms={ms}, {kwargs}')
         nan = np.isnan(y.astype(float))
         
         if sum(nan) == len(y):
@@ -47,16 +51,40 @@ class DummyAx():
             print('[WARN] Values are NaN and replaced by 0')
             if 'label' in kwargs:
                 kwargs['label'] += ' NAN'
-        #print(kwargs.keys())
 
         if color is None:
-            color = COLORS[self.iPlot % len(COLORS)]
-        print(color)
-        marker = MARKERS[self.iPlot % len(MARKERS)]
+            if c is not None:
+                color=c
+            else:
+                color = COLORS[self.iPlot % len(COLORS)]
+        if color=='k':
+                color = COLORS[0]
+
+        if marker is None:
+            marker = MARKERS[self.iPlot % len(MARKERS)]
+        else:
+            marker = kwargs.pop('marker', 'o')
+            if marker in MARKERS_CONV:
+                marker = MARKERS_CONV[marker]
+            else:
+                print('pyplot_term.py: Marker not implemented '+marker)
+                marker = MARKERS[0]
+        label = kwargs.pop('label', None)
 
         if self.ia is not None and self.ib is not None:
             _plt.subplot(self.ia+1, self.ib+1)
-        _plt.plot(x, y, marker=marker, color=color, **kwargs)
+        print(f'pyplot_term {self.iPlot} ls={ls}, marker={marker}, color={color}, {kwargs}')
+        if ls is None or ls=='':
+            for i, (xi, yi) in enumerate(zip(x,y)):
+                _plt.plot([xi], [yi], marker=marker, color=color, label=label if i==0 else None, **kwargs)
+        else:
+            _plt.plot(x, y, marker=marker, color=color, **kwargs)
+
+        # Store lims
+        self.xlim[0] = min(self.xlim[0], np.min(x))
+        self.xlim[1] = max(self.xlim[1], np.max(x))
+        self.ylim[0] = min(self.ylim[0], np.min(y))
+        self.ylim[1] = max(self.ylim[1], np.max(y))
 
 
         self.iPlot+=1
@@ -72,15 +100,32 @@ class DummyAx():
             _plt.subplot(self.ia+1, self.ib+1)
         _plt.ylabel(*args, **kwargs)
 
-    def set_xlim(self, lims):
+    def set_xlim(self, lims, limMax=None):
+        if limMax is not None:
+            lims = [lims, limMax]
         if self.ia is not None and self.ib is not None:
             _plt.subplot(self.ia+1, self.ib+1)
+        self.xlim = lims
         _plt.xlim(lims[0], lims[1])
 
-    def set_ylim(self, lims):
+    def set_ylim(self, lims, limMax=None):
+        if limMax is not None:
+            lims = [lims, limMax]
         if self.ia is not None and self.ib is not None:
             _plt.subplot(self.ia+1, self.ib+1)
+        self.ylim = lims
         _plt.ylim(lims[0], lims[1])
+
+    def get_xlim(self):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
+        return self.xlim
+
+    def get_ylim(self):
+        if self.ia is not None and self.ib is not None:
+            _plt.subplot(self.ia+1, self.ib+1)
+        return self.ylim
+
 
     def set_aspect(self, *args, **kwargs):
         #print('[pyplott] aspect skipped')
@@ -157,31 +202,9 @@ def ylim(lims):
 
 
 
-def plot(x, y, *args, color=None, ms=None, iPlot=[0], markerfacecolor=None, **kwargs):
-    if len(args)==1:
-        sty = args[0]
-        #print('>>> sty', sty)
-    if not hasattr(x, '__len__'):
-        x = [x]
-    if not hasattr(y, '__len__'):
-        y = [y]
-    x = np.asarray(x)
-    y = np.asarray(y)
-    nan = np.isnan(y.astype(float))
-    
-    if sum(nan) == len(y):
-        y = x*0
-        print('[WARN] Values are NaN and replaced by 0')
-        if 'label' in kwargs:
-            kwargs['label'] += ' NAN'
-
-    #marker = MARKERS[self.iPlot % len(MARKERS)]
-    if color is None:
-        color = COLORS[iPlot[0] % len(COLORS)]
-    marker = MARKERS[0]
-
-    _plt.plot(x, y, marker=marker, color=color, **kwargs)
-    iPlot[0]+=1
+def plot(*args, **kwargs):
+    ax= DummyAx()
+    ax.plot(*args, **kwargs)
 
 def legend(*args, **kwargs):
     pass
