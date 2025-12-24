@@ -40,6 +40,7 @@ def plot_polar_df(axes, df, sty, label=None, c=None):
 
 
 
+
 def plot_polars(polars, verbose=False, 
                 cfd_sty='-', cfd_c='k'
                 ):
@@ -104,6 +105,12 @@ def plot_polars(polars, verbose=False,
     #axes[0].set_title('Cl and Cd vs Angle of Attack')
     axes[0].grid(True)
     axes[1].grid(True)
+
+    ymin, ymax = axes[0].get_ylim()
+    axes[0].set_ylim(*np.clip(axes[0].get_ylim(), -3, 3))
+    axes[1].set_ylim(*np.clip(axes[1].get_ylim(), -3, 3))
+    axes[1].set_xlim(*np.clip(axes[1].get_xlim(), 0, 3))
+
     return fig
 
 
@@ -285,19 +292,23 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=1, verbo
         dfs.append(df)
         d = {'Alpha': aoa, 'Nt':len(df)}
         if use_ss:
-            ss = analyze_steady_state(df['Time'].values, df['Fpy'].values)
-            d.update(ss)
+            if len(df)<20:
+                print('[WARN] Few data in file, not analyzing SS: '+input_file)
+            else:
+                ss = analyze_steady_state(df['Time'].values, df['Fpy'].values)
+                d.update(ss)
         sss.append(d)
     dfss = pd.DataFrame(sss)
 
     # --- 
-    if use_ss:
+    if use_ss and 't_trans1' in dfss:
         t_onset_default = (dfss['t_trans1'].mean()+ dfss['t_trans2'].mean())/2
         if np.isnan(t_onset_default):
             print('[WARN] No steady-state ever detected, setting t_onset to None')
             t_onset_default=None
             use_ss =None
     else:
+        use_ss =False
         t_onset_default = None
 
     # --- Create Polar dataframe

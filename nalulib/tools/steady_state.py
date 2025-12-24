@@ -144,11 +144,14 @@ def analyze_steady_state(
 
     t = np.asarray(t)
     x = np.asarray(x)
-    dt = t[1] - t[0]
     N = len(x)
-    if N<30:
+    if N<2:
+        print('[FAIL] steady_state.py: Less than 2 values, no determination of SS done.')
+        return d_out
+    elif N<30:
         print('[WARN] steady_state.py: Less than 30 values, determination of SS might be wrong.')
         plot=True
+    dt = t[1] - t[0]
 
     # --- Detrend (linear)
     #x_dt = detrend(x, type="linear")
