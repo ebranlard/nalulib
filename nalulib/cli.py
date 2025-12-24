@@ -10,7 +10,7 @@ from nalulib.exodus import exo_zextrude_CLI
 from nalulib.gmesh import gmsh2exo_CLI
 from nalulib.nalu_aseq import nalu_aseq_CLI
 from nalulib.nalu_forces import nalu_forces_CLI
-from nalulib.nalu_forces_combine_CLI import nalu_forces_combine_CLI
+from nalulib.nalu_forces_combine import nalu_forces_combine_CLI
 from nalulib.nalu_input import nalu_input_CLI
 from nalulib.nalu_restart import nalu_restart_CLI
 from nalulib.plot3D_plot3D2exo import plt3d2exo_CLI

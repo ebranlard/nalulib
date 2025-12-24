@@ -4,6 +4,7 @@ from scipy.signal import correlate, find_peaks
 from scipy import signal
 
 
+class SignalTooShortException(Exception): pass
 
 # --------------------------------------------------------------------------------}
 # --- Transient detection
@@ -16,6 +17,8 @@ def transientEnd_stats(t, x, W=None, W_frac=0.05, eps_mu_rel=0.0005, eps_sigma_r
     # --- Automatic window length
     if W is None:
         W = int(max(10, N*W_frac)) # Window length
+    if W> len(x):
+        raise SignalTooShortException('Signal too short')
 
     # --- Sliding statistics over window
     # Option 1 (expensive)
@@ -143,6 +146,9 @@ def analyze_steady_state(
     x = np.asarray(x)
     dt = t[1] - t[0]
     N = len(x)
+    if N<30:
+        print('[WARN] steady_state.py: Less than 30 values, determination of SS might be wrong.')
+        plot=True
 
     # --- Detrend (linear)
     #x_dt = detrend(x, type="linear")
@@ -160,25 +166,30 @@ def analyze_steady_state(
     # --------------------------------------------------------------------------------{
     T_tot = t[-1] - t[0]
     t_min = head_frac_min*T_tot + t[0]
-    t_trans = transientEnd_stats(t, x, plot=plot, eps_mu_rel=0.0001, eps_sigma_rel=0.001, eps_E_rel=0.001) 
+    try:
+        t_trans = transientEnd_stats(t, x, plot=plot, eps_mu_rel=0.0001, eps_sigma_rel=0.001, eps_E_rel=0.001) 
+        head_frac = head_frac_max
+        if t_trans is not None:
+            t_frac = (t_trans-t[0])/ T_tot
+            if (t_frac<head_frac_min) or (t_frac>head_frac_max) :
+                pass
+                #print(f'[WARN] Transient time {t_frac*100:.1f}% not within {head_frac_min*100:.1f}%-{head_frac_max*100:.1f}%')
+            else:
+                head_frac = t_frac
+        t_trans1 = head_frac*T_tot + t[0]
+        b = t> t_trans1
+        t = t[b]
+        x = x[b]
+        head_frac=0
+        d_out['t_trans1'] = t_trans1
+    except SignalTooShortException as e:
+        print('[FAIL] steady_state.py: Cannot find stead-state, signal is too short')
+        head_frac=0
+        d_out['t_trans1'] = 0
     #print('t_trans', t_trans)
     #if t_trans is None:
     #    t_trans = transientEnd_stats(t, x, plot=plot, eps_mu_rel=0.01, eps_sigma_rel=0.01, eps_E_rel=0.01) 
     #    print('t_trans', t_trans)
-    head_frac = head_frac_max
-    if t_trans is not None:
-        t_frac = (t_trans-t[0])/ T_tot
-        if (t_frac<head_frac_min) or (t_frac>head_frac_max) :
-            pass
-            #print(f'[WARN] Transient time {t_frac*100:.1f}% not within {head_frac_min*100:.1f}%-{head_frac_max*100:.1f}%')
-        else:
-            head_frac = t_frac
-    t_trans1 = head_frac*T_tot + t[0]
-    b = t> t_trans1
-    t = t[b]
-    x = x[b]
-    head_frac=0
-    d_out['t_trans1'] = t_trans1
     
     # --------------------------------------------------------------------------------}
     # --- Convergence to constant
@@ -222,13 +233,21 @@ def analyze_steady_state(
             f0s =[f0s[ii]]
             doms=[doms[ii]]
 
-
-    f0 = f0s[0]
-    dom = doms[0]
+    if len(f0s)==0:
+        print('[WARN] steady_state.py: No dominant frequencies found.')
+        f0 = np.nan
+        dom = np.nan
+    else:
+        f0 = f0s[0]
+        dom = doms[0]
 
     f1 = detect_period_by_peaks(t, x, T_guess=1/f0, plot=plot, head_frac=head_frac)
     T1=1/f1
     T0=1/f0
+    if np.isnan(f0):
+        period = 1.0 / f0
+    else:
+        period = 1.0 / f1 # Might be NaN
     #if abs(T1 - T0) / T0 > 0.3: # Check if difference > 30% of T0
     #    print('T0', 1/f0)
     #    print('T1', 1/f1)
@@ -241,8 +260,11 @@ def analyze_steady_state(
     if len(f0s)<= 0:
         d_out['type'] = 'not_converged_1'
         return d_out
+
+    if np.isnan(period):
+        d_out['type'] = 'not_converged_2'
+        return d_out
 # 
-    period = 1.0 / f0
     # ------------------------------------------------------------
     # 4. Time-domain periodic validation (backward)
     # ------------------------------------------------------------
@@ -266,8 +288,9 @@ def detect_period_by_peaks(t, x, T_guess=None, plot=False, head_frac=0.1, head_f
     from welib.tools.damping import peak_indexes
     dt = t[1]-t[0]
     min_dist=1
-    if T_guess is not None:
-        min_dist = max(1, int((T_guess/10)/dt) )
+    if (T_guess is not None):
+        if not np.isnan(T_guess):
+            min_dist = max(1, int((T_guess/10)/dt) )
         #print('min_dist', min_dist)
 
 
