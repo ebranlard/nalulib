@@ -702,11 +702,11 @@ class NALUInputFile(YamlEditor):
         
         if plot:
             fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8))
-            ax.plot(df['Time_[s]'].values, df['angle'].values, '-', label="theta [deg]")
-            ax.plot(df['Time_[s]'].values, df['x'].values, '--', label="x [m]")
-            ax.plot(df['Time_[s]'].values, df['y'].values, label="y [m]")
-            ax.plot(df['Time_[s]'].values, df['ox'].values, "--", label="ox [m]")
-            ax.plot(df['Time_[s]'].values, df['oy'].values, "--", label="oy [m]")
+            ax.plot(df['Time_[s]'].values, df['angle_[deg]'].values, '-', label="theta [deg]")
+            ax.plot(df['Time_[s]'].values, df['x_[m]'].values, '--', label="x [m]")
+            ax.plot(df['Time_[s]'].values, df['y_[m]'].values, label="y [m]")
+            ax.plot(df['Time_[s]'].values, df['ox_[m]'].values, "--", label="ox [m]")
+            ax.plot(df['Time_[s]'].values, df['oy_[m]'].values, "--", label="oy [m]")
             ax.set_xlabel("t [s]")
             ax.set_ylabel("Motion")
             if xlim is not None:
