@@ -10,8 +10,10 @@ import numpy as np
 # Local
 import nalulib.pyplot as plt
 from nalulib.nalu_input import NALUInputFile
+from nalulib.nalu_output import read_forces_csv
 from nalulib.tools.steady_state import analyze_steady_state
 from nalulib.weio.csv_file import CSVFile
+
 
 
 def standardize_polar_df(df):
@@ -134,94 +136,22 @@ def extract_aoa(filename):
     return None
 
 
-def reference_force_yml(yml, Aref, dimensionless=True):
-    if isinstance(yml, str):
-        yml = NALUInputFile(yml)
-    #if verbose:
-    #    print(yml)
-    vel = yml.velocity
-    U0  = np.linalg.norm(vel)
-    rho = yml.density
-    nu  = yml.viscosity
-    Fin = 1
-    if dimensionless:
-        if (U0 is None or rho is None or nu is None):
-            raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
-        # Dimensionless forces
-        Fin = 0.5 * rho * Aref * U0**2
-    return Fin, U0, rho, nu, yml
-
-def reference_force(Aref=1, rho=1.2, nu=9e-6, U0=None, yaml_file='input.yaml', auto=True, dimensionless=True, verbose=False, yml=None):
-    # --- Infer velocity and density from input file
-    if yml is not None:
-        Fin, U0, rho, nu, yml = reference_force_yml(yml, Aref, dimensionless)
-    elif os.path.exists(yaml_file) and auto:
-        print('[INFO] Reading velocity and density from input file:', yaml_file)
-        yml = NALUInputFile(yaml_file)
-        Fin, U0, rho, nu, yml = reference_force_yml(yml, Aref, dimensionless)
-    else:
-        yml = None
-        Fin = 1
-        U0 = U0
-        rho = rho
-        nu = nu
-        if dimensionless:
-            raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
-    return Fin, U0, rho, nu, yml
-
-
-
-
-def read_forces_csv(input_file='forces.csv', tmin=None, tmax=None, verbose=False, Fin=None):
-    df0 = CSVFile(input_file).toDataFrame()
-    df = df0.copy()
-
-    if tmin is not None:
-        df = df[df['Time']>tmin]
-    if tmax is not None:
-        df = df[df['Time']<tmax]
-
-    if verbose:
-        print('nSteps:',len(df), len(df0))
-
-    df['Fx'] = ( df['Fpx'].values + df['Fvx'].values)
-    df['Fy'] = ( df['Fpy'].values + df['Fvy'].values)
-    df['Cx'] = df['Fx'] / Fin
-    df['Cy'] = df['Fy'] / Fin   
-
-    return df
-
-
-
-def read_forces_yaml(yaml_file, Aref=None, dimensionless=True, verbose=False, tmin=None, tmax=None):
+def read_forces_yaml(yaml_file, chord=1, span=1, dimensionless=True, verbose=False, tmin=None, tmax=None):
     """ 
     Read forces based on a yaml file, concatenate them if necessary
     """
     yml = None
-    Fin = 1.0
     _, ext = os.path.splitext(yaml_file)
     if ext.lower() not in ['.yaml', '.yml', '.i']:
         raise Exception('Input should be yaml', yaml_file)
-    yml = NALUInputFile(yaml_file)
-    Fin, U0, rho, nu, _ = reference_force_yml(yml, Aref, dimensionless=dimensionless)
-    csv_files = []
-    basedir = os.path.dirname(yaml_file)
-    for realm in yml.data['realms']: 
-        if 'post_processing' in realm:
-            for pp in realm['post_processing']:
-                force_file = os.path.join(basedir, pp['output_file_name'])
-                csv_files.append(force_file)
+    yml = NALUInputFile(yaml_file, chord=chord, span=span)
 
-    for i, csv_file in enumerate(csv_files):
-        df = read_forces_csv(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
-        if i==0:
-            df_prev = df
-        else:
-            # Add all except 'time'
-            df.loc[:, df.columns != 'Time'] = df.drop(columns='Time') + df_prev.drop(columns='Time')
-            df['Time'] = (df['Time'] + df_prev['Time']) / 2
+    if dimensionless:
+        df, Fref, csv_files = yml.read_surface_forces(tmin=tmin, tmax=tmax, verbose=verbose, Fref=1)
+    else:
+        df, Fref, csv_files = yml.read_surface_forces()
 
-    return df, Fin, yml, U0, rho, nu, csv_files
+    return df, Fref, yml, csv_files
 
 
 def input_files_from_patterns(patterns):
@@ -254,8 +184,7 @@ def input_files_from_patterns(patterns):
     return input_files, input_is_csv
 
 
-
-def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, verbose=False, polar_out=None, 
+def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, span=None, verbose=False, polar_out=None, 
                   use_ss=False,
                   polars=None, plot=False, cfd_m = '', cfd_ls='-', cfd_c='k'):
     """ 
@@ -266,9 +195,9 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, ve
     """
     dfp = None
     fig = None
-    if dz is None:
-        dz=1 # TODO automatic from yaml
-    Aref = chord*dz
+    if span is None:
+        span=1 # TODO automatic from yaml
+    Aref = chord*span
 
     # --- Input files
     input_files, input_is_csv = input_files_from_patterns(input_pattern)
@@ -282,7 +211,8 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, ve
     if input_is_csv:
         if yaml_file is None:
             raise Exception('Provide yaml file if input are force files.')
-        Fin, U0, rho, nu, yml = reference_force_yml(yaml_file, Aref, dimensionless=True)
+        yml = NALUInputFile(yaml_file, chord=chord, span=span)
+        Fref = yml.reference_force
 
     # --- Loop on files (csv or yaml)
     #d_sorted = dict(sorted(d.items(), key=lambda x: x[0]))
@@ -294,9 +224,9 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, ve
             print(f' {input_file} ')
         try:
             if input_is_csv:
-                df = read_forces_csv(input_file, verbose=verbose, Fin=Fin)
+                df = read_forces_csv(input_file, verbose=verbose, Fref=Fref)
             else:
-                df, Fin, yml, U0, rho, nu, csv_files = read_forces_yaml(input_file, Aref=Aref, dimensionless=True, verbose=verbose)
+                df, Fref, yml, csv_files = read_forces_yaml(input_file, chord=chord, span=span, dimensionless=True, verbose=verbose)
         except Exception as e:
             print(f"[FAIL] Error reading {input_file}: {e}")
             continue
@@ -373,7 +303,7 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, dz=None, ve
 
 
 def nalu_forces(input_files='forces.csv', tmin=None, tmax=None, 
-                chord=1, rho=None, nu=None, U0=None, dz=None, 
+                chord=1, rho=None, nu=None, U0=None, span=None, 
                 yaml_file=None,
                 polar_ref=None,
                 polar_exp=None,
@@ -391,9 +321,8 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
     if dimensionless:
         FC, label='C' , 'Coefficient [-]'
 
-    if dz is None:
-        dz=1  # TODO
-    Aref = chord*dz
+    if span is None:
+        span=1  # TODO
 
     # --- Are we dealing with multiple files or one file?
     if isinstance(input_files, str):
@@ -419,25 +348,44 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
     # --- One input_file
     if len(input_files) == 1:
         for input_file in input_files:
+            yml = None
             if input_is_csv:
-                Fin, U0, rho, nu, yml = reference_force(Aref=Aref, rho=rho, nu=nu, U0=U0, yaml_file=yaml_file, auto=auto, dimensionless=dimensionless, verbose=verbose)
-                dft, yml = read_forces(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fin=Fin)
+                if dimensionless:
+                    if auto:
+                        # Read from yaml_file
+                        if not os.path.exists(yaml_file):
+                            raise Exception(f'Please provide a yaml file for dimensionless forces or set auto to False. yaml file not found: {yaml_file}')
+                        if verbose:
+                            print('[INFO] Reading velocity and density from input file:', yaml_file)
+                        yml = NALUInputFile(yaml_file, chord=chord, span=span)
+                        Fref = yml.reference_force
+                    else:
+                        if any(x is None for x in [chord, rho, nu, U0, span] ):
+                            raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
+                        Fref = 1/2 * rho * chord * span * U0**2 
+
+                dft = read_forces_csv(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref)
                 sInfo =  'YML  : {}\n'.format(yaml_file)
                 sInfo += 'CSV  : {}'.format(input_file)
             else:
-                dft, Fin, yml, U0, rho, nu, csv_files = read_forces_yaml(input_file, Aref=Aref, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+                dft, Fref, yml, csv_files = read_forces_yaml(input_file, chord=chord, span=span, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
                 sInfo  = 'YML  : {}\n'.format(input_file)
                 sInfo += 'CSV  : {}'.format(csv_files)
 
             if verbose:
                 print(sInfo)
-                print('chord: {:9.3f}  '.format(chord))
-                print('dz   : {:9.3f}  '.format(dz))
-                print('U0   : {:9.3f}  '.format(U0))
-                print('rho  : {:9.3f}  '.format(rho))
-                print('nu   : {:9.3e}  '.format(nu))
+                if yml is not None:
+                    U0  = np.linalg.norm(yml.velocity)
+                    rho = yml.density
+                    nu  = yml.viscosity
+                if dimensionless:
+                    print('chord: {:9.3f}  '.format(chord))
+                    print('span : {:9.3f}  '.format(span))
+                    print('U0   : {:9.3f}  '.format(U0))
+                    print('rho  : {:9.3f}  '.format(rho))
+                    print('nu   : {:9.3e}  '.format(nu))
                 print('Re   : {:9.3f} Million'.format(U0 * chord /(nu*1e6)))
-                print('Fref : {:9.3f} [N]'.format(Fin))
+                print('Fref : {:9.3f} [N]'.format(Fref))
                 print('nStep: {:d}'.format(len(dft)))
                 print('Last : Time[-1]={:.3f}, {}x[-1]={:.3f}, {}y[-1]={:.3f}'.format(dft['Time'].values[-1], FC, dft['Cx'].values[-1], FC, dft['Cy'].values[-1]))
 
@@ -460,7 +408,7 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
         return
 
     # ---
-    dfp, dfss, figp = polar_postpro(patterns, yaml_file, tmin=tmin, chord=chord, dz=dz, verbose=verbose, polar_out=polar_out, polars={'ref':polar_ref, 'exp':polar_exp}, plot=plot, cfd_ls=cfd_ls)
+    dfp, dfss, figp = polar_postpro(patterns, yaml_file, tmin=tmin, chord=chord, span=span, verbose=verbose, polar_out=polar_out, polars={'ref':polar_ref, 'exp':polar_exp}, plot=plot, cfd_ls=cfd_ls)
 
     return dfp, figp, dft, figt
 

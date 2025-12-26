@@ -138,6 +138,8 @@ class YamlEditor:
             else:
                 yaml.dump(data, fid, default_flow_style=False)
 
+
+
     def lines(self):
         buf = StringIO()
         self.yaml.dump(self.data, buf)
@@ -295,8 +297,8 @@ def process_motion_list(motions):
             'dth': float(motion.get('angle', np.nan)),
             'start_time': float(motion.get('start_time', np.nan)),
             'end_time': float(motion.get('end_time', np.nan)),
-            'ox': ox,
-            'oy': oy,   
+            'ox_[m]': ox,
+            'oy_[m]': oy,   
             'dx': dx,
             'dy': dy,   
             'dz': dz
@@ -317,17 +319,17 @@ def process_motion_list(motions):
     df_rot['dt_prev'] = df_rot['start_time'].shift(-1)-df_rot['end_time']
     df_tra['dt_prev'] = df_tra['start_time'].shift(-1)-df_tra['end_time']
 
-    df_rot['ox'] = df_rot['ox'].cumsum()
-    df_rot['oy'] = df_rot['oy'].cumsum()
+    df_rot['ox_[m]'] = df_rot['ox_[m]'].cumsum()
+    df_rot['oy_[m]'] = df_rot['oy_[m]'].cumsum()
 
-    df_rot['angle']    = df_rot['dth'].cumsum()
-    df_tra['x'] = df_tra['dx'].cumsum()
-    df_tra['y'] = df_tra['dy'].cumsum()
-    df_tra['z'] = df_tra['dz'].cumsum()
+    df_rot['angle_[deg]']    = df_rot['dth'].cumsum()
+    df_tra['x_[m]'] = df_tra['dx'].cumsum()
+    df_tra['y_[m]'] = df_tra['dy'].cumsum()
+    df_tra['z_[m]'] = df_tra['dz'].cumsum()
 
     # Drop unused columns
-    df_rot = df_rot[['Time_[s]', 'angle', 'ox', 'oy']]
-    df_tra = df_tra[['Time_[s]', 'x', 'y', 'z']]
+    df_rot = df_rot[['Time_[s]', 'angle_[deg]', 'ox_[m]', 'oy_[m]']]
+    df_tra = df_tra[['Time_[s]', 'x_[m]', 'y_[m]', 'z_[m]']]
 
     # Merge/interpolate on Time (outer join, then interpolate missing values)
     df = pd.merge(df_rot, df_tra, on='Time_[s]', how='outer').sort_values('Time_[s]').reset_index(drop=True)
@@ -345,9 +347,11 @@ def process_motion_list(motions):
 
 class NALUInputFile(YamlEditor):
 
-    def __init__(self, filename=None, reader='yaml', profiler=False):
+    def __init__(self, filename=None, reader='yaml', profiler=False, chord=None, span=None):
         """ Initialize NALUInputFile with a YAML file path """
         super().__init__(filename=filename, reader=reader, profiler=profiler)
+        self._chord = chord
+        self._span = span
 
     def copy(self):
         new = NALUInputFile()
@@ -382,13 +386,13 @@ class NALUInputFile(YamlEditor):
                         for mesh_motion in realm['mesh_motion']:
                             motions_list = mesh_motion['motion']
                             df, _, _ = process_motion_list(motions_list)
-                            s += f"          - size:{len(df)} tmin:{df['Time_[s]'].min():.3f} tmax:{df['Time_[s]'].max():.3f} xmax:{df['x'].max():.3f} ymax:{df['y'].max():.3f} thmax:{df['angle'].max():.3f}\n"
+                            s += f"          - size:{len(df)} tmin:{df['Time_[s]'].min():.3f} tmax:{df['Time_[s]'].max():.3f} xmax:{df['x_[m]'].max():.3f} ymax:{df['y_[m]'].max():.3f} thmax:{df['angle_[deg]'].max():.3f}\n"
                 specs, niter = equation_systems_specs(realms[0])
                 s += "     - equations_system: iterations:{},  specs:\n".format(niter)
+                for k,v in specs.items():
+                    s += "         - {:30s}: {:15s}\n".format(k,v)
             except Exception as e:
                 s += f" [Error reading realms: {e}]\n"
-            for k,v in specs.items():
-                s += "         - {:30s}: {:15s}\n".format(k,v)
             try: 
                 for i, sol in  enumerate(solvers_list(self.data)):
                     s += f" * solver[{i}] : name:{sol['name']:15s} type:{sol['type']:10s} method:{sol['method']:15s}\n"
@@ -399,27 +403,164 @@ class NALUInputFile(YamlEditor):
             s += f" * transition_model : {self.transition_model}\n" 
 
             # Computed properties
-            nu  = self.viscosity
-            vel = self.velocity
-            rho = self.density
-            U0  = np.linalg.norm(vel)
-            Re  = rho*U0*1/nu/ 1e6
+            U0  = np.linalg.norm(self.velocity)
             time_dict = self.time_dict
             dt = time_dict['dt']
-            dt_rec = 0.02 * 1  / U0
-            s += f" * time      : {time_dict}  (dt_rec~{dt_rec:.4f} if chord=1)\n"
-            s += f" * velocity  : {vel}\n"
-            s += f" * density   : {rho}\n"
-            s += f" * viscosity : {nu}  (nu)\n"
-            s += f" * Reynolds  ~ {Re:.2f}M (if chord=1)\n"
+            chord_assumed = '(assumed chord=1)' if self._chord == None else ''
+            span_assumed = '(assumed span=1)' if self._span == None else ''
+            s += f" * time      : {time_dict}  - dt_rec~{self.dt_recommended:.4f} {chord_assumed:s}\n"
+            s += f" * chord     : {self.chord} {chord_assumed:s}\n"
+            s += f" * span      : {self.span} {span_assumed:s}\n"
+            s += f" * velocity  : {self.velocity}\n"
+            s += f" * density   : {self.density}\n"
+            s += f" * viscosity : {self.viscosity} (nu)\n"
+            s += f" * Reynolds  : {self.Reynolds/1e6:.2f}M {chord_assumed:s}\n"
 
             s += "methods:\n"
             s += " - sort, extract_mesh_motion, check, print"
             return s
+
+
+    # --------------------------------------------------------------------------------}
+    # --- Useful getters and optional setters (in alphabetical order)
+    # --------------------------------------------------------------------------------{
     @property
-    def realm_names(self):
-        """Returns the name of the first realm, or None if not found."""
-        return [r.get('name') for r in self.data['realms']]
+    def bc_target_names(self):
+        """ Returns a list of all target names for boundary conditions """
+        target_names = []
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'target_name' in bc:
+                    if isinstance(bc['target_name'], list):
+                        target_names.extend(bc['target_name'])
+                    else:
+                        target_names.append(bc['target_name'])
+        return target_names
+
+    @property
+    def chord(self):
+        return self._chord if self._chord is not None else 1
+
+    @chord.setter
+    def chord(self, chord):
+        self._chord=chord
+
+    @property
+    def density(self):
+        for realm in self.data['realms']:
+            #if 'material_properties' in realm:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'density':
+                    return specs['value']
+        #raise Exception('Unable to extract density from yaml file')
+        return np.nan
+
+    @density.setter
+    def density(self, new_density):
+        for realm in self.data['realms']:
+            for specs in realm['material_properties']['specifications']:
+                if specs['name'] == 'density':
+                    specs['value'] = new_density
+
+    @property
+    def dt_recommended(self):
+        vel = self.velocity
+        dt_rec = 0.02 * self.chord  / np.linalg.norm(vel)
+        return dt_rec
+
+    @property
+    def IC_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'specific_dissipation_rate' in ic['value']:
+                    return ic['value']['specific_dissipation_rate']
+                print(ic)
+    @IC_specific_dissipation_rate.setter
+    def IC_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'specific_dissipation_rate' in ic['value']:
+                    ic['value']['specific_dissipation_rate'] = value
+    @property
+    def IC_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'turbulent_ke' in ic['value']:
+                    return ic['value']['turbulent_ke']
+                print(ic)
+    @IC_turbulent_ke.setter
+    def IC_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for ic in realm['initial_conditions']:
+                if 'turbulent_ke' in ic['value']:
+                    ic['value']['turbulent_ke'] = value
+    @property
+    def inflow_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    return bc['inflow_user_data']['specific_dissipation_rate']
+    @inflow_specific_dissipation_rate.setter
+    def inflow_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    bc['inflow_user_data']['specific_dissipation_rate'] = value
+    @property
+    def inflow_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    return bc['inflow_user_data']['turbulent_ke']
+    @inflow_turbulent_ke.setter
+    def inflow_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'inflow_user_data' in bc:
+                    bc['inflow_user_data']['turbulent_ke'] = value
+
+    @property
+    def motion(self):
+        return self.extract_mesh_motion()
+
+
+    @property
+    def outflow_turbulent_ke(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    return bc['open_user_data']['turbulent_ke']
+    @outflow_turbulent_ke.setter
+    def outflow_turbulent_ke(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    bc['open_user_data']['turbulent_ke'] = value
+    @property
+    def outflow_specific_dissipation_rate(self):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    return bc['open_user_data']['specific_dissipation_rate']
+    @outflow_specific_dissipation_rate.setter
+    def outflow_specific_dissipation_rate(self, value):
+        for realm in self.data['realms']:
+            for bc in realm['boundary_conditions']:
+                if 'open_user_data' in bc:
+                    bc['open_user_data']['specific_dissipation_rate'] = value
+
+    @property
+    def q0(self):
+        """ Dynamic pressure """
+        vel = self.velocity
+        U0  = np.linalg.norm(vel)
+        rho = self.density
+        q0 = 0.5 * rho *  U0**2
+        #F0 = q0 * Aref
+        return q0
+
+
+
 
     @property
     def velocity(self):
@@ -445,23 +586,66 @@ class NALUInputFile(YamlEditor):
                 if 'value' in ic and 'velocity' in ic['value']:
                     ic['value']['velocity'] = new_velocity
 
+    @property
+    def Reynolds(self):
+        nu  = self.viscosity
+        vel = self.velocity
+        rho = self.density
+        chord = self.chord
+        U0  = np.linalg.norm(vel)
+        Re  = rho*U0*chord/nu
+        return Re
 
     @property
-    def density(self):
-        for realm in self.data['realms']:
-            #if 'material_properties' in realm:
-            for specs in realm['material_properties']['specifications']:
-                if specs['name'] == 'density':
-                    return specs['value']
-        #raise Exception('Unable to extract density from yaml file')
-        return np.nan
+    def realm_names(self):
+        """Returns the name of the first realm, or None if not found."""
+        return [r.get('name') for r in self.data['realms']]
 
-    @density.setter
-    def density(self, new_density):
-        for realm in self.data['realms']:
-            for specs in realm['material_properties']['specifications']:
-                if specs['name'] == 'density':
-                    specs['value'] = new_density
+
+    @property
+    def reference_force(yml):
+       vel = yml.velocity
+       U0  = np.linalg.norm(vel)
+       rho = yml.density
+       Aref = yml.chord*yml.span
+       Fref = 0.5 * rho * Aref * U0**2
+       return Fref
+
+    @property
+    def solvers_dict(self):
+        """ Returns [tstart, dt, tmax] """
+        return solvers_dict(self.data)
+
+    @property
+    def span(self):
+        return self._span if self._span is not None else 1
+
+    @span.setter
+    def span(self, span):
+        self._span=span
+
+
+    @property
+    def time_dict(self):
+        """ Returns [tstart, dt, tmax] """
+        return time_dict(self.data)
+
+    @property
+    def turbulence_model(self):
+        model = find_key_recursive(self.data, 'turbulence_model')
+        if model is None:
+            return 'unknown'
+            #raise Exception('Unable to extract turbulence_model from yaml file')
+        return model
+
+    @property
+    def transition_model(self):
+        transition = find_key_recursive(self.data, 'transition_model')
+        if transition is None:
+            return 'unknown'
+            #raise Exception('Unable to extract transition_model from yaml file')
+        return transition
+
 
     @property
     def viscosity(self):
@@ -481,136 +665,9 @@ class NALUInputFile(YamlEditor):
                 if specs['name'] == 'viscosity':
                     specs['value'] = value
 
-    # --- Turbulent KE
-    @property
-    def IC_turbulent_ke(self):
-        for realm in self.data['realms']:
-            for ic in realm['initial_conditions']:
-                if 'turbulent_ke' in ic['value']:
-                    return ic['value']['turbulent_ke']
-                print(ic)
-    @IC_turbulent_ke.setter
-    def IC_turbulent_ke(self, value):
-        for realm in self.data['realms']:
-            for ic in realm['initial_conditions']:
-                if 'turbulent_ke' in ic['value']:
-                    ic['value']['turbulent_ke'] = value
-    @property
-    def inflow_turbulent_ke(self):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'inflow_user_data' in bc:
-                    return bc['inflow_user_data']['turbulent_ke']
-    @inflow_turbulent_ke.setter
-    def inflow_turbulent_ke(self, value):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'inflow_user_data' in bc:
-                    bc['inflow_user_data']['turbulent_ke'] = value
-    @property
-    def outflow_turbulent_ke(self):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'open_user_data' in bc:
-                    return bc['open_user_data']['turbulent_ke']
-    @outflow_turbulent_ke.setter
-    def outflow_turbulent_ke(self, value):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'open_user_data' in bc:
-                    bc['open_user_data']['turbulent_ke'] = value
-
-    # --- Specific dissipation rate
-    @property
-    def IC_specific_dissipation_rate(self):
-        for realm in self.data['realms']:
-            for ic in realm['initial_conditions']:
-                if 'specific_dissipation_rate' in ic['value']:
-                    return ic['value']['specific_dissipation_rate']
-                print(ic)
-    @IC_specific_dissipation_rate.setter
-    def IC_specific_dissipation_rate(self, value):
-        for realm in self.data['realms']:
-            for ic in realm['initial_conditions']:
-                if 'specific_dissipation_rate' in ic['value']:
-                    ic['value']['specific_dissipation_rate'] = value
-    @property
-    def inflow_specific_dissipation_rate(self):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'inflow_user_data' in bc:
-                    return bc['inflow_user_data']['specific_dissipation_rate']
-    @inflow_specific_dissipation_rate.setter
-    def inflow_specific_dissipation_rate(self, value):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'inflow_user_data' in bc:
-                    bc['inflow_user_data']['specific_dissipation_rate'] = value
-    @property
-    def outflow_specific_dissipation_rate(self):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'open_user_data' in bc:
-                    return bc['open_user_data']['specific_dissipation_rate']
-    @outflow_specific_dissipation_rate.setter
-    def outflow_specific_dissipation_rate(self, value):
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'open_user_data' in bc:
-                    bc['open_user_data']['specific_dissipation_rate'] = value
 
 
-    @property
-    def turbulence_model(self):
-        model = find_key_recursive(self.data, 'turbulence_model')
-        if model is None:
-            return 'unknown'
-            #raise Exception('Unable to extract turbulence_model from yaml file')
-        return model
-
-    @property
-    def transition_model(self):
-        transition = find_key_recursive(self.data, 'transition_model')
-        if transition is None:
-            return 'unknown'
-            #raise Exception('Unable to extract transition_model from yaml file')
-        return transition
     
-    @property
-    def bc_target_names(self):
-        """ Returns a list of all target names for boundary conditions """
-        target_names = []
-        for realm in self.data['realms']:
-            for bc in realm['boundary_conditions']:
-                if 'target_name' in bc:
-                    if isinstance(bc['target_name'], list):
-                        target_names.extend(bc['target_name'])
-                    else:
-                        target_names.append(bc['target_name'])
-        return target_names
-
-    @property
-    def q0(self):
-        vel = self.velocity
-        U0  = np.linalg.norm(vel)
-        rho = self.density
-        q0 = 0.5 * rho *  U0**2
-        #F0 = q0 * Aref
-        return q0
-
-    @property
-    def time_dict(self):
-        """ Returns [tstart, dt, tmax] """
-        return time_dict(self.data)
-
-    @property
-    def solvers_dict(self):
-        """ Returns [tstart, dt, tmax] """
-        return solvers_dict(self.data)
-
-    @property
-    def motion(self):
-        return self.extract_mesh_motion()
 
     def extract_mesh_motion(self, plot=False, csv_file=None, export=False, xlim=None, ylim=None):
         """ Extract mesh motion from the YAML file and optionally plot or export it """
@@ -667,6 +724,42 @@ class NALUInputFile(YamlEditor):
         return df
 
 
+    def read_surface_forces(self, tmin=None, tmax=None, verbose=None, Fref=None):
+        from nalulib.nalu_output import read_forces_csv
+        # Use reference force from ourself or provided one (for "Cx Cy")
+        if Fref is None:
+            Fref = self.reference_force
+
+        # Extract name of csv files:
+        csv_files = []
+        basedir = os.path.dirname(self.filename)
+        for realm in self.data['realms']: 
+            if 'post_processing' in realm:
+                for pp in realm['post_processing']:
+                    force_file = os.path.join(basedir, pp['output_file_name'])
+                    csv_files.append(force_file)
+
+        # Add the forces from all csv file (but do not add the time, instead, we take the average time)
+        for i, csv_file in enumerate(csv_files):
+            if verbose:
+                print('Reading force file:', csv_file)
+            df = read_forces_csv(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref)
+            if i==0:
+                df_prev = df
+            else:
+                df.loc[:, df.columns != 'Time'] = df.drop(columns='Time') + df_prev.drop(columns='Time')
+                df['Time'] = (df['Time'] + df_prev['Time']) / 2
+        return df, Fref, csv_files
+
+    def save_no_motion(self, outpath):
+        yml = self.copy()
+        for i in range(len(yml.data['realms'])):
+            try:
+                del yml.data['realms'][i]['mesh_motion']
+                print('Deleted mesh_motion')
+            except:
+                pass
+        yml.save(outpath)
 
     def set_sine_motion(self, A, f, n_periods, t_steady=0, dt=None, DOF='pitch', plot=False, irealm=0):
         """
@@ -783,10 +876,9 @@ class NALUInputFile(YamlEditor):
 
 
             # Check for time step consistency
-            vel = self.velocity
             time_dict = self.time_dict
             dt = time_dict['dt']
-            dt_rec = 0.02 * 1  / np.linalg.norm(vel)
+            dt_rec = self.dt_recommended
             if (np.abs(dt-dt_rec)/dt_rec) > 0.5:
                 errors.append(f"Time step dt={dt:.4f} is inconsistent with expected dt_rec={dt_rec:.4f} (if chord=1).")
 
