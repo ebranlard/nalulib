@@ -448,7 +448,7 @@ def nalu_forces_CLI():
         rho=args.rho,
         nu=args.nu,
         U0=args.U0,
-        dz=args.dz,
+        span=args.dz,
         yaml_file=args.yaml,
         polar_ref=args.polar_ref,
         polar_exp=args.polar_exp,
