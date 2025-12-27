@@ -301,15 +301,20 @@ class DataFrameDatabase:
     def keys(self):
         return self.configs.keys()
 
-    def __getitem__(self, index):
+    def __getitem__(self, index_or_column):
         """
         Allows indexing into the database using db[index].
 
         Returns the config and dataframe at the specified index.
         """
-        if index < 0 or index >= len(self.dfs):
-            raise IndexError("Index out of range.")
-        return self.configs.loc[index].to_dict(), self.dfs[index]
+        if type(index_or_column) is int:
+            index = index_or_column
+            if index < 0 or index >= len(self.dfs):
+                raise IndexError("Index out of range.")
+            return self.configs.loc[index].to_dict(), self.dfs[index]
+        else:
+            column = index_or_column
+            return self.configs[column]
 
     def __len__(self):
         """

@@ -751,6 +751,26 @@ class NALUInputFile(YamlEditor):
                 df['Time'] = (df['Time'] + df_prev['Time']) / 2
         return df, Fref, csv_files
 
+    def remove_output(self, verbose=False):
+        for i in range(len(self.data['realms'])):
+            if 'output' in self.data['realms'][i]:
+                del self.data['realms'][i]['output']
+                if verbose:
+                    print(f'Deleted output in realm {i}')
+            else:
+                if verbose:
+                    print(f'No output to delete in realm {i}')
+
+    def remove_restart(self, verbose=False):
+        for i in range(len(self.data['realms'])):
+            if 'restart' in self.data['realms'][i]:
+                del self.data['realms'][i]['restart']
+                if verbose:
+                    print(f'Deleted restart in realm {i}')
+            else:
+                if verbose:
+                    print(f'No restart to delete in realm {i}')
+
     def save_no_motion(self, outpath):
         yml = self.copy()
         for i in range(len(yml.data['realms'])):
@@ -760,6 +780,47 @@ class NALUInputFile(YamlEditor):
             except:
                 pass
         yml.save(outpath)
+
+    def set_output(self, verbose=False, **kwargs):
+        """ set same outputs for all realms, potentially add them if not in file"""
+        #basicDict={}
+        #basicDict['output_data_base_name']='results/base.e'
+        #basicDict['output_frequency']= 5000
+
+        nRealms = len(self.data['realms'])
+        for i in range(nRealms):
+            if 'output' not in self.data['realms'][i]:
+                self.data['realms'][i]['output']={}
+            for k,v in kwargs.items():
+                if k=='output_data_base_name' and nRealms>1:
+                    raise Exception('TODO handle different directory per realms')
+                self.data['realms'][i]['output'][k] = v
+        #output:
+        #  output_data_base_name: results/du00w212_F.e
+        #  output_frequency: 5000
+        #  output_node_set: false
+        #  output_variables:
+        #  - velocity
+        #  - pressure
+        #  - turbulent_ke
+        #  - specific_dissipation_rate
+        #  - turbulent_viscosity
+        #  - minimum_distance_to_wall
+        #  - gamma_transition
+
+    def set_output(self, verbose=False, **kwargs):
+        """ set same outputs for all realms, potentially add them if not in file"""
+        #basicDict={}
+        #basicDict['restart_data_base_name']='restart/base.e'
+        #basicDict['restart_frequency']= 5000
+        nRealms = len(self.data['realms'])
+        for i in range(nRealms):
+            if 'restart' not in self.data['realms'][i]:
+                self.data['realms'][i]['restart']={}
+            for k,v in kwargs.items():
+                if k=='restart_data_base_name' and nRealms>1:
+                    raise Exception('TODO handle different directory per realms')
+                self.data['realms'][i]['restart'][k] = v
 
     def set_sine_motion(self, A, f, n_periods, t_steady=0, dt=None, DOF='pitch', plot=False, irealm=0):
         """
