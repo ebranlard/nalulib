@@ -43,8 +43,8 @@ def nalu_batch(batch_file_template=None, nalu_input_file=None, cluster=None, ver
             elif '--mail-' in line and (not mail):
                 lines[i] = '#' + line  # Comment the line
             elif '--time' in line and hours is not None:
-                d = hours // 24
-                h = hours % 24
+                d = int(hours // 24)
+                h = int(hours % 24)
                 lines[i] = '#SBATCH --time={:d}-{:02d}:00:00\n'.format(d,h)
             elif '--nodes' in line and nodes is not None:
                 lines[i] = '#SBATCH --nodes={:d}\n'.format(nodes)
