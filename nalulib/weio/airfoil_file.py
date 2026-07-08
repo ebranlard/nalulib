@@ -397,7 +397,14 @@ def read_airfoil_csv_like(filename):
     else:
         raise BrokenFormatError("CSV file must have exactly two columns for x and y coordinates.")
     # Check if numpy array are all floats, otherwise( e.g. if they are objects) raise an exception
-    if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
+    #if not np.issubdtype(np.dtype(x.dtype), np.floating) or not np.issubdtype(np.dtype(y.dtype), np.floating):
+    if not pd.api.types.is_float_dtype(x) or not pd.api.types.is_float_dtype(y):
+#     try: 
+#         np.issubdtype(x.dtype, np.floating) 
+#         np.issubdtype(y.dtype, np.floating)
+#     except:
+#         import pdb; pdb.set_trace()
+#     if not np.issubdtype(x.dtype, np.floating) or not np.issubdtype(y.dtype, np.floating):
         # We allow the last value to be non float..
         IO = find_non_float_indices(x)
         if len(IO) ==1 and IO[0] == len(x)-1:
