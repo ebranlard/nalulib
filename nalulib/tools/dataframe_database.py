@@ -32,6 +32,9 @@ class DataFrameDatabase:
             if not isinstance(configs, pd.DataFrame):
                 raise Exception('configs must be a dataframe')
             self.configs = configs 
+            if dfs is None:
+                dfs = [pd.DataFrame()]*len(configs)
+                self.dfs=dfs
 
     def insert(self, config, df):
         """
@@ -244,8 +247,8 @@ class DataFrameDatabase:
         else:
             db_loc = self.copy()
             db_loc.name+='_'+db.name
-            for c, df in db:
-                db_loc.insert(c, df)
+        for c, df in db:
+            db_loc.insert(c, df)
         return db_loc
 
 
@@ -377,11 +380,13 @@ class DataFrameDatabase:
         s+= f" * db.common:         {self.common}\n"
         s+= f" * db.common_config:  {self.common_config}\n"
         s+= f" - db.configs: <pandas DataFrame>:\n {self.configs}\n"
-        s+= f"useful_functions: \n"
+        s+= f"useful functions: \n"
+        s+= f" - newdb = db.insert(config, df)\n"
         s+=  " - newdb = db.select(config) , e.g. config={'key1':'val1'}\n"
         s+= f" - newdb = db.select_approximate(key, value, tol)\n"
         s+= f" - c, df  = db.get_singelton(config)\n"
-        s+= f"useful_usage: \n"
-        s+=  "   c, df = db[0]\n"
-        s+=  "   for config, df in db:"
+        s+= f" - newdb  = db.simplify() # identify common configs\n"
+        s+= f"useful usage: \n"
+        s+=  " - c, df = db[0]\n"
+        s+=  " - for config, df in db:"
         return s
