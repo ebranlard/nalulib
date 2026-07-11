@@ -156,6 +156,7 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
     PUpperTE = None
     ITE = find_TE_indices(x_tmp, y_tmp, TE_type=None, raiseError=False, method='angle')
     if len(ITE) == 2:
+        if verbose:
             print('[INFO] Detected TE shape > (sharp)')
     elif len(ITE) > 2:
         # blunt TE
@@ -164,15 +165,19 @@ def standardize_airfoil_coords(x, y, reltol=_DEFAULT_REL_TOL, verbose=False):
         xte_max = np.max(x_tmp[ITE])
         PUpperTE = (x_tmp[ITE[iiymax]], y_tmp[ITE[iiymax]])
         if xte_min == xte_max:
-            print('[INFO] Detected TE shape | (blunt)')
+            if verbose:
+                print('[INFO] Detected TE shape | (blunt)')
         elif PUpperTE[0]==xte_min:
-            print('[INFO] Detected TE shape \\ (blunt)')
+            if verbose:
+                print('[INFO] Detected TE shape \\ (blunt)')
         elif PUpperTE[0]==xte_max:
-            print('[INFO] Detected TE shape / (blunt)')
+            if verbose:
+                print('[INFO] Detected TE shape / (blunt)')
         else:
-            print(x_tmp[ITE])
-            print(y_tmp[ITE])
-            print('Upper TE detected as:', PUpperTE)
+            if verbose:
+                print(x_tmp[ITE])
+                print(y_tmp[ITE])
+                print('Upper TE detected as:', PUpperTE)
             raise Exception('[INFO] Unknown  TE shape ??? (blunt)')
     else:
         raise Exception('[INFO] Unknown TE shape ??? (sharp)')
@@ -242,7 +247,7 @@ def airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseE
     return all(checks)
 
 
-def airfoil_TE_type(x, y, method=_DEFAULT_ITE_METHOD, ITE=None):
+def airfoil_TE_type(x, y, method=_DEFAULT_ITE_METHOD, ITE=None, SS=None):
     """ Detects the type of trailing edge (TE) of an airfoil contour."""
     closed = contour_is_closed(x, y)
     if closed:
@@ -251,7 +256,10 @@ def airfoil_TE_type(x, y, method=_DEFAULT_ITE_METHOD, ITE=None):
         nSharp=1
     # --- Find TE points
     if ITE is None:
-        _, _, ITE, _ = airfoil_split_surfaces(x, y, method=method)
+        if SS is None:
+            _, _, ITE, _ = airfoil_split_surfaces(x, y, method=method)
+        else:
+            _, _, ITE, _ = SS
     #IXmax = np.where(x == np.max(x))[0]
     if len(ITE) == nSharp:
         # TODO cusps, based on y
@@ -267,6 +275,33 @@ def find_te_indices_by_xmax(x):
     ITE = np.concatenate((IXmax[1:], [IXmax[0]]))
     return ITE
 
+
+def find_te_indices_by_angle(x, y, angle_threshold=45, verbose=False, xc_threshold=0.9):
+    """
+    Alternative method to find trailing edge (TE) indices by computing the angle at each point between its neighbors.
+    Points with an angle > angle_threshold (degrees) are considered TE candidates.
+    Returns a list of TE indices.
+    """
+    from nalulib.curves import contour_angles
+    angles = contour_angles(x, y)
+    if verbose:
+        print('angles', np.around(angles, 1))
+        print('angles', np.around(np.abs(angles - 180), 1))
+    te_indices = np.where(np.abs(angles - 180) > angle_threshold)[0]
+    if verbose:
+        print(f"[find_te_indices_by_angle] TE indices (angle > {angle_threshold}): {te_indices} ({len(x)-1})")
+        print(f"[find_te_indices_by_angle] Angles at TE indices: {angles[te_indices]}")
+
+    ITE = te_indices.tolist()
+    if verbose:
+        print(f"[find_te_indices_by_angle] ITE indices  {ITE})")
+    # --- Only keep the ones that are within 90% of the x-length
+    xmax = np.max(x)
+    chord = xmax - np.min(x)
+    ITE = [i for i in ITE if x[i] >= xmax - (1 - xc_threshold) * chord]
+    if verbose:
+        print(f"[find_te_indices_by_angle] ITE indices  {ITE})")
+    return ITE, angles
 
 def find_TE_indices(x, y, TE_type=None, raiseError=True, method="angle"):
     """ Tries to find TE indices for closed coutnerclockwise airofoil"""
@@ -402,36 +437,79 @@ def airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, method=
 
     return IUpper, ILower, ITE, iLE
 
-def find_te_indices_by_angle(x, y, angle_threshold=60, verbose=False, xc_threshold=0.9):
+
+def _sort_unique_xy(x, y):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    order = np.argsort(x)
+    x = x[order]
+    y = y[order]
+    x_unique, idx = np.unique(x, return_index=True)
+    return x_unique, y[idx]
+
+
+def airfoil_camberline(x, y, n=None, TE_type=None, SS=None):
+    """Compute the camber line for an airfoil contour.
+
+    Upper and lower surfaces are split using airfoil_split_surfaces().
+    The camber line is defined on a common x-grid constructed from the
+    maximum number of points of the two surfaces.
     """
-    Alternative method to find trailing edge (TE) indices by computing the angle at each point between its neighbors.
-    Points with an angle > angle_threshold (degrees) are considered TE candidates.
-    Returns a list of TE indices.
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    if SS is  None:
+        SS = airfoil_split_surfaces(x, y, TE_type=TE_type)
+    IUpper, ILower, ITE, iLE = SS
+    xu, yu = x[IUpper], y[IUpper]
+    xl, yl = x[ILower], y[ILower]
+
+    xu, yu = _sort_unique_xy(xu, yu)
+    xl, yl = _sort_unique_xy(xl, yl)
+
+    n = int(n if n is not None else max(len(xu), len(xl)))
+    if n < 2:
+        raise ValueError('Need at least two points to compute camberline.')
+
+    x0 = np.linspace(min(xu[0], xl[0]), max(xu[-1], xl[-1]), n)
+    y0u = np.interp(x0, xu, yu)
+    y0l = np.interp(x0, xl, yl)
+    y0 = 0.5 * (y0u + y0l)
+    return x0, y0
+
+
+def thickness_max_from_camber(x, y, n=None, TE_type=None, SS=None):
+    """Compute maximum thickness from the camber line.
+
+    Returns:
+        thickness_max: float
+        x_max: float
+        y_camber_max: float
+        x0: ndarray
+        y0: ndarray
+        thickness: ndarray
     """
-    from nalulib.curves import contour_angles
-    angles = contour_angles(x, y)
-    if verbose:
-        print('angles', np.around(angles,1))
-        print('angles', np.around(np.abs(angles-180),1))
-    te_indices = np.where( np.abs(angles-180) > angle_threshold)[0]
-    if verbose:
-        print(f"[find_te_indices_by_angle] TE indices (angle > {angle_threshold}): {te_indices} ({len(x)-1})")
-        print(f"[find_te_indices_by_angle] Angles at TE indices: {angles[te_indices]}")
+    if SS is  None:
+        SS = airfoil_split_surfaces(x, y, TE_type=TE_type)
+    IUpper, ILower, ITE, iLE = SS
+    x0, y0 = airfoil_camberline(x, y, n=n, SS=SS)
+    xu, yu = x[IUpper], y[IUpper]
+    xl, yl = x[ILower], y[ILower]
 
-    ITE = te_indices.tolist()
-    #nlarge = len(ITE)
+    xu, yu = _sort_unique_xy(xu, yu)
+    xl, yl = _sort_unique_xy(xl, yl)
 
-    # --- Only keep the ones that are within 90% of the x-length
-    xmax = np.max(x)
-    chord = xmax-np.min(x)
-    #print(ITE, len(x)-1)
-    ITE = [i for i in ITE if x[i] >= xmax - (1-xc_threshold) * chord]
-
-    return ITE, angles
+    y0u = np.interp(x0, xu, yu)
+    y0l = np.interp(x0, xl, yl)
+    thickness = np.abs(y0u - y0l)
+    i_max = int(np.nanargmax(thickness))
+    return float(thickness[i_max]), float(x0[i_max]), float(y0[i_max]), x0, y0, thickness
 
 
 
-def airfoil_trailing_edge_angle(x, y, plot=False):
+
+
+def airfoil_trailing_edge_angle(x, y, plot=False, TE_type=None, SS=None):
     """
     Computes the trailing edge angle using the first two upper points and the last two lower points.
     Returns a dictionary with:
@@ -442,7 +520,9 @@ def airfoil_trailing_edge_angle(x, y, plot=False):
         - angle_low_deg: lower tangent angle (deg, from x-axis)
         - x_fit, y_fit_up, y_fit_low: points for plotting the tangent lines (optional)
     """
-    IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y)
+    if SS is  None:
+        SS = airfoil_split_surfaces(x, y, TE_type=TE_type)
+    IUpper, ILower, ITE, iLE = SS
     # Upper: first two points
     x1u, y1u = x[IUpper[0]], y[IUpper[0]]
     x2u, y2u = x[IUpper[1]], y[IUpper[1]]
@@ -499,7 +579,7 @@ def airfoil_trailing_edge_angle(x, y, plot=False):
 
     return angle_deg, result
 
-def airfoil_leading_edge_radius(x, y, verbose=False, plot=False):
+def airfoil_leading_edge_radius(x, y, verbose=False, plot=False, TE_type=None, SS=None):
     """
     Estimate the leading edge radius of an airfoil by fitting a circle to points around the LE.
     The points are automatically selected as those closest to the LE (min x), up to the inflection
@@ -515,7 +595,9 @@ def airfoil_leading_edge_radius(x, y, verbose=False, plot=False):
     """
     x = np.asarray(x)
     y = np.asarray(y)
-    _, _, _, iLE = airfoil_split_surfaces(x, y)
+    if SS is  None:
+        SS = airfoil_split_surfaces(x, y, TE_type=TE_type)
+    IUpper, ILower, ITE, iLE = SS
 
     # Find points near the LE (min x)
     xLE, yLE = x[iLE], y[iLE]
@@ -913,11 +995,15 @@ def arrow_from_0_passing_1(x, y, L=0.1):
     return dxL, dyL
 
 
-def plot_standardized(x, y, first=True, orient=True, label=None, legend=True, title='', ax=None, simple=False, sty='k.-', TE_type=None):
+def plot_standardized(x, y, first=True, orient=True, label=None, legend=True, title='', ax=None, 
+                      simple=False, thickness=True, TEangle=True,
+                        sty='k.-', TE_type=None, SS=None):
     """ Plot airfoil coordinates if standardized using airfoil_standardize_coords()."""
     airfoil_is_standardized(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, raiseError=True)
 
-    IUpper, ILower, ITE, iLE = airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, TE_type=TE_type)
+    if SS is  None:
+        SS = airfoil_split_surfaces(x, y, reltol=_DEFAULT_REL_TOL, verbose=False, TE_type=TE_type)
+    IUpper, ILower, ITE, iLE = SS
     TE_type = airfoil_TE_type(x, y, ITE=ITE)
     xu,  yu  = x[IUpper], y[IUpper]      
     xl,  yl  = x[ILower], y[ILower]
@@ -950,9 +1036,21 @@ def plot_standardized(x, y, first=True, orient=True, label=None, legend=True, ti
         ax.plot(xTE, yTE, '-x', label=f'Trailing edge (n={len(xTE)}, {TE_type})' , markerfacecolor='none', markersize=6)
         ax.plot(xLE, yLE, '^',  label='Leading edge', markerfacecolor='none', markersize=6)
 
-
     if first and not simple:
         ax.plot(x[0], y[0], 's', label='First point', markerfacecolor='none', markersize=10)
+
+    if thickness:
+        t_max, x0i, y0i, x0, y0, thick = thickness_max_from_camber(x, y, SS=SS)
+        ax.plot(x0, y0, ':', color='gray')# , label='Camber line'
+        ax.plot([x0i, x0i], [y0i-t_max/2, y0i+t_max/2], ':', color='gray')
+        #label='Maximum thickness {:.2f}'.format(t_max), 
+
+    if TEangle:
+        angle, angres = airfoil_trailing_edge_angle(x, y, plot=False, SS=SS)
+        ax.plot(angres['x_fit'], angres['y_fit_up'] , 'k--')
+        #, label='TE tangent lines, angle={:.2f}°'.format(angle))
+        ax.plot(angres['x_fit'], angres['y_fit_low'], 'k--')
+
 
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -960,7 +1058,7 @@ def plot_standardized(x, y, first=True, orient=True, label=None, legend=True, ti
         ax.legend()
     ax.set_aspect( 'equal' )
     if title is not None:
-        ax.set_title(title + f' n={len(x)} {TE_type} TE')
+        ax.set_title(title + f' n: {len(x)} TE: {TE_type}, orientation: {contour_orientation(x, y)}, thickness: {t_max:.3f}, TE angle: {angle:.3f}°')
     return ax
 
 def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True, verbose=False, simple=False):

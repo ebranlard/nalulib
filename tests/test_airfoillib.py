@@ -66,6 +66,30 @@ class TestAirfoilLib(unittest.TestCase):
         angle = test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=3.49)
         #plt.show()
 
+    #def test_airfoil_camberline(self):
+        #x, y = airfoil_get_xy('naca0012', sharp=True)
+        #x_new, y_new = standardize_airfoil_coords(x, y)
+        #x0, y0 = airfoil_camberline(x_new, y_new)
+        #self.assertEqual(len(x0), max(len(x_new)//2-1, len(y_new)//2)-1)
+        #self.assertEqual(len(y0), len(x0))
+        #thickness_max, x_max, y_camber_max, x0b, y0b, thickness = thickness_mass_from_camber(x_new, y_new)
+        #self.assertAlmostEqual(thickness_max, np.max(thickness), places=12)
+        #self.assertEqual(len(x0b), len(y0b))
+
+    #def test_airfoil_shape_camberline_methods(self):
+        #x, y = airfoil_get_xy('naca0012', sharp=True)
+        #x_new, y_new = standardize_airfoil_coords(x, y)
+        #x0, y0 = airfoil_camberline(x_new, y_new)
+        #from nalulib.airfoil_shapes import StandardizedAirfoilShape
+        #arf = StandardizedAirfoilShape(x=x_new, y=y_new)
+        #x0m, y0m = arf.camberline()
+        #self.assertTrue(np.allclose(x0, x0m))
+        #self.assertTrue(np.allclose(y0, y0m))
+        #thickness_max, x_max, y_camber_max, x0b, y0b, thickness = arf.thickness_mass_from_camber()
+        #self.assertAlmostEqual(thickness_max, np.max(thickness), places=12)
+        #angle_deg, result = arf.trailing_edge_angle(plot=False)
+        #self.assertAlmostEqual(angle_deg, airfoil_trailing_edge_angle(x_new, y_new, plot=False)[0], places=10)
+
     def test_leading_edge_radius(self):
         # NOTE: LEADING EDGE RADIUS IS NOT FINISHED
         def test(*args, expected=0, **kwargs):

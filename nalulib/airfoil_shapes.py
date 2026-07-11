@@ -145,7 +145,6 @@ class StandardizedAirfoilShape():
     def ds_min(self):
         return np.min(self.ds)
 
-
     @property
     def chord(self):
         return np.max(self.x) - np.min(self.x)
@@ -155,8 +154,18 @@ class StandardizedAirfoilShape():
         return np.max(self.y) - np.min(self.y)
 
     @property
+    def thickness_max_from_camber(self):
+        """Compute max thickness from the camber line and return thickness info."""
+        return thickness_max_from_camber(self._x, self._y)[0]
+
+    @property
     def t_rel_max(self):
         return self.thickness_max/self.chord
+
+    @property
+    def trailing_edge_angle(self):
+        """Compute the trailing edge angle for this airfoil."""
+        return airfoil_trailing_edge_angle(self._x, self._y, plot=False, TE_type=self._TE_TYPE)[0]
 
     @property
     def orientation(self):
@@ -172,11 +181,18 @@ class StandardizedAirfoilShape():
     # --- Geometry
     # --------------------------------------------------------------------------------
     def _split_surfaces(self):
-        self._IUpper, self._ILower, self._ITE, self._iLE = airfoil_split_surfaces(self._x, self._y, reltol=self.reltol, verbose=self.verbose, TE_type=self._TE_TYPE)
+        self._SS = airfoil_split_surfaces(self._x, self._y, reltol=self.reltol, verbose=self.verbose, TE_type=self._TE_TYPE)
+        self._IUpper, self._ILower, self._ITE, self._iLE  = self._SS
         self._xu,  self._yu  = self._x[self._IUpper], self._y[self._IUpper]      
         self._xl,  self._yl  = self._x[self._ILower], self._y[self._ILower]
         self._xTE, self._yTE = self._x[self._ITE]   , self._y[self._ITE]
         self._xLE, self._yLE = self._x[self._iLE]   , self._y[self._iLE]
+
+    def camberline(self, n=None):
+        """Compute the camber line coordinates for this airfoil."""
+        x0, y0 = airfoil_camberline(self._x, self._y, n=n, TE_type=self._TE_TYPE)
+        return x0, y0
+
 
     def resample_te(self, n_te=None, inplace=False):
         self._split_surfaces()
@@ -277,8 +293,10 @@ class StandardizedAirfoilShape():
         s+='| - name       : {}\n'.format(self.name)
         s+='| * TE_type    : {}\n'.format(self._TE_TYPE)
         s+='| * chord      : {}\n'.format(self.chord)
-        s+='| * thickness_max: {:.6f}\n'.format(self.thickness_max)
-        s+='| * t_rel_max  :     {:.6f}\n'.format(self.t_rel_max)
+        s+='| * t_rel_max  : {:.6f}\n'.format(self.t_rel_max)
+        s+='| * thickness_max            : {:.6f}\n'.format(self.thickness_max)
+        s+='| * thickness_max_from_camber: {:.6f}\n'.format(self.thickness_max_from_camber)
+        s+='| * trailing_edge_angle      : {:.6f}\n'.format(self.trailing_edge_angle)
         # Original attributes
         s+='|Properties of the original airfoil (before standardization):\n'
         s+='| > (original) number of points : {:4d}\n'.format(len(self._ori_xy))
@@ -343,6 +361,7 @@ class StandardizedAirfoilShape():
         return ax
 
     def plot(self, **kwargs):
+
         return plot_standardized(self._x, self._y, TE_type=self._TE_TYPE,**kwargs)
 
     def tri_plot(self, axes=None, legend=True, title='', n_target=30, **kwargs):
@@ -655,7 +674,7 @@ class AirfoilShape():
     # --------------------------------------------------------------------------------
     # --- Plot
     # --------------------------------------------------------------------------------
-    def plot_surfaces(self):
+    def plot_surfaces(self, title=None):
         xu, yu, xl, yl, Iu, Il = self.split_surfaces()
         x0, y0, y0u, y0l = self.camberline()
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
@@ -669,7 +688,10 @@ class AirfoilShape():
         ax.legend()
         ax.set_xlabel('x')
         ax.set_ylabel('y')
-        ax.set_title(self.name)
+        if title is not None:
+            ax.set_title(title)
+        else:
+            ax.set_title(self.name)
         plt.axis ( 'equal' )
         return ax
 
@@ -682,7 +704,7 @@ class AirfoilShape():
             y = self.y
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
-        ax.plot(self.x, self.y, '.-', label=label)
+        ax.plot(self.x, self.y, label=label, marker='.')
         
         if first:
             ax.plot(self.x[0], self.y[0], 's', label='First point')
@@ -760,6 +782,13 @@ def airfoil_info(input_file, name='', TE_type=None, plot=False, verbose=False):
     x, y, _ = read_airfoil(input_file, verbose=verbose, TE_type=TE_type)
 
     arf = StandardizedAirfoilShape(x, y, name=name or input_file, verbose=verbose)
+
+    print('TE_type                  : {}'.format(arf._TE_TYPE))
+    print('chord                    : {}'.format(arf.chord))
+    print('thickness_max            : {:.6f}'.format(arf.thickness_max))
+    print('thickness_max_from_camber: {:.6f}'.format(arf.thickness_max_from_camber))
+    print('trailing_edge_angle      : {:.6f}'.format(arf.trailing_edge_angle))
+
     if verbose:
         print(arf)
 

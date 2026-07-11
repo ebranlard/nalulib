@@ -8,11 +8,30 @@ from nalulib.airfoil_shapes_naca import naca_shape
 # --------------------------------------------------------------------------------}
 # ---  
 # --------------------------------------------------------------------------------{
-class TestAirfoilShape(unittest.TestCase):
+class TestStandardizedAirfoilShape(unittest.TestCase):
+
+
+    def test_properties(self):
+        def test(filename, thickness, angle):
+            fullpath = os.path.join(scriptDir, filename)
+            arf = StandardizedAirfoilShape(filename =fullpath)
+            np.testing.assert_almost_equal(arf.thickness_max_from_camber, thickness, decimal=4)
+            np.testing.assert_almost_equal(arf.trailing_edge_angle, angle, decimal=1)
+            #arf.plot()
+        test('../data/airfoils/naca0012_sharp.fmt', 0.12, 16.49)
+        test('../data/airfoils/S809.csv', 0.2098, 3.01) # ???? That small?
+        #test('../data/airfoils/ffa_w3_211_coords.cs', 0.21, 15.91)
+
 
     def test_problematic_airfoils(self):
-        # 
+        # Test TE types and indices 
         info = []
+        info += [('../data/airfoils/tests/snl-ffa-w3-560fb_coords.csv', 'blunt', [397,398,0])] # Blunt
+        info += [('../data/airfoils/tests/snl-ffa-w3-480fb_coords.csv', 'blunt', [397,398,0])] # Blunt
+        info += [('../data/airfoils/tests/fb60_coords.csv', 'blunt', [198,199,0])] # Blunt
+        info += [('../data/airfoils/tests/fb90_coords.csv', 'blunt', [397,398,0])] # Blunt
+        info += [('../data/airfoils/tests/fb80_coords.csv', 'blunt', [198,199,0])] # Blunt
+
         info += [('../data/airfoils/tests/naca6412.dat', 'blunt', [60,61, 62, 0])] # Blunt inclined like this: / 
         info += [('../data/airfoils/blunt_not_straight.csv'         , 'blunt' , np.concatenate((np.arange(499,524), [0])))] # Inclined like this: /
         info += [('../data/airfoils/tests/du91-w2-225_nalu_l40.csv' , 'sharp' , np.array([40  , 0]))] # Sharp blunt like this: =>
@@ -21,9 +40,9 @@ class TestAirfoilShape(unittest.TestCase):
         info += [('../data/airfoils/tests/sd7034.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
         info += [('../data/airfoils/tests/ste87151.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
 
-        #info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
-        #info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
-        #info += [('../data/airfoils/tests/goe795sm.dat', 'sharp', [90, 0])]
+        ##info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
+        ##info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
+        ##info += [('../data/airfoils/tests/goe795sm.dat', 'sharp', [90, 0])]
 
         for fpath, TE_type, ITE in info:
             fullpath = os.path.join(scriptDir, fpath)
@@ -34,7 +53,16 @@ class TestAirfoilShape(unittest.TestCase):
             np.testing.assert_array_equal(arf._ITE, ITE)
 
 
+    def test_resample_blunt(self):
+        #
+        #def airfoil_get_xy(airfoil_coords_wrap, format=None, **kwargs):
+        filename = '../data/airfoils/tests/fb60_coords.csv'
+        fullpath = os.path.join(scriptDir, filename)
+        arf = StandardizedAirfoilShape(filename=fullpath)
+        print('test')
 
+
+class TestAirfoilShape(unittest.TestCase):
     def test_manip_sharp(self):
         # Manipulations for a sharp trailing edge airfoil
         #P=Polar(os.path.join(MyDir,'../data/Cylinder.dat'))
@@ -115,7 +143,9 @@ class TestAirfoilShape(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    TestAirfoilShape().test_problematic_airfoils()
+    TestAirfoilShape().test_resample_blunt()
+    #TestAirfoilShape().test_problematic_airfoils()
+    #TestAirfoilShape().test_properties()
     #unittest.main()
     #import matplotlib.pyplot as plt
-    plt.show()
+    #plt.show()
