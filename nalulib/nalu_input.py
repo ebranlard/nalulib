@@ -235,7 +235,7 @@ def time_dict(yml):
         dt = np.nan
         nt_max = np.nan
     tstart = it_start * dt
-    return {'tstart': tstart, 'dt':dt, 'tmax':nt_max}
+    return {'tstart': tstart, 'dt':dt, 'tmax':nt_max*dt, 'ntmax':nt_max}
 
 def solvers_list(yml):
     """ return a dictionary with solvers information from the YAML file """
@@ -405,15 +405,17 @@ class NALUInputFile(YamlEditor):
             # Computed properties
             U0  = np.linalg.norm(self.velocity)
             time_dict = self.time_dict
+            time = self.time
             dt = time_dict['dt']
             chord_assumed = '(assumed chord=1)' if self._chord == None else ''
             span_assumed = '(assumed span=1)' if self._span == None else ''
-            s += f" * time      : {time_dict}  - dt_rec~{self.dt_recommended:.4f} {chord_assumed:s}\n"
+            s += f" * time_dict : {time_dict}  - dt_rec~{self.dt_recommended:.4f} {chord_assumed:s}\n"
+            s += f" * time      : n={len(time)}\n"
             s += f" * chord     : {self.chord} {chord_assumed:s}\n"
             s += f" * span      : {self.span} {span_assumed:s}\n"
             s += f" * velocity  : {self.velocity}\n"
             s += f" * density   : {self.density}\n"
-            s += f" * viscosity : {self.viscosity} (nu)\n"
+            s += f" * viscosity : {self.viscosity} (mu)\n"
             s += f" * Reynolds  : {self.Reynolds/1e6:.2f}M {chord_assumed:s}\n"
 
             s += "methods:\n"
@@ -588,12 +590,12 @@ class NALUInputFile(YamlEditor):
 
     @property
     def Reynolds(self):
-        nu  = self.viscosity
+        mu  = self.viscosity
         vel = self.velocity
         rho = self.density
         chord = self.chord
         U0  = np.linalg.norm(vel)
-        Re  = rho*U0*chord/nu
+        Re  = rho*U0*chord/mu
         return Re
 
     @property
@@ -624,6 +626,12 @@ class NALUInputFile(YamlEditor):
     def span(self, span):
         self._span=span
 
+    @property
+    def time(self):
+        """ Returns [tstart, dt, tmax] """
+        td = self.time_dict
+        return np.arange(td['tstart'], td['tmax']+td['dt']/2, td['dt'])
+
 
     @property
     def time_dict(self):
@@ -649,7 +657,11 @@ class NALUInputFile(YamlEditor):
 
     @property
     def viscosity(self):
-        """ kinematic viscosity , nu = mu/rho """
+        """ Dynamic viscosity , mu = rho*nu NOT KINEMATIC VISCOSITY
+        This conclusion is based on this test case:
+            https://github.com/marchdf/flatPlate/
+            https://github.com/marchdf/flatPlate/blob/master/69x49/flatPlate.yaml
+        """
         for realm in self.data['realms']:
             #if 'material_properties' in realm:
             for specs in realm['material_properties']['specifications']:
@@ -660,6 +672,7 @@ class NALUInputFile(YamlEditor):
 
     @viscosity.setter
     def viscosity(self, value):
+        """ Dynamic viscosity , mu = rho*nu NOT KINEMATIC VISCOSITY"""
         for realm in self.data['realms']:
             for specs in realm['material_properties']['specifications']:
                 if specs['name'] == 'viscosity':
@@ -724,11 +737,12 @@ class NALUInputFile(YamlEditor):
         return df
 
 
-    def read_surface_forces(self, tmin=None, tmax=None, verbose=None, Fref=None):
+    def read_surface_forces(self, tmin=None, tmax=None, verbose=None, Fref=None, Mref=None):
         from nalulib.nalu_output import read_forces_csv
         # Use reference force from ourself or provided one (for "Cx Cy")
         if Fref is None:
             Fref = self.reference_force
+            Mref = Fref * 1 # TODO chord
 
         # Extract name of csv files:
         csv_files = []
@@ -743,7 +757,7 @@ class NALUInputFile(YamlEditor):
         for i, csv_file in enumerate(csv_files):
             if verbose:
                 print('Reading force file:', csv_file)
-            df = read_forces_csv(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref)
+            df = read_forces_csv(input_file=csv_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref, Mref=Mref)
             if i==0:
                 df_prev = df
             else:

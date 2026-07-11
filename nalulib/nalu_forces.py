@@ -14,6 +14,25 @@ from nalulib.nalu_output import read_forces_csv
 from nalulib.tools.steady_state import analyze_steady_state
 from nalulib.weio.csv_file import CSVFile
 
+try:
+    from welib.tools.strings import FAIL, WARN, OK, INFO
+except:
+    def FAIL(msg, label='[FAIL] ', **kwargs):
+        msg = ('\n'+ ' ' * len(label)).join( (label+msg).split('\n') ) # Indending new lines
+        print(msg, **kwargs)
+
+    def WARN(msg, label='[WARN] ', **kwargs):
+        msg = ('\n'+ ' ' * len(label)).join( (label+msg).split('\n') ) # Indending new lines
+        cprint(msg, **kwargs)
+
+    def OK(msg, label='[ OK ] ', **kwargs):
+        msg = ('\n'+ ' ' * len(label)).join( (label+msg).split('\n') ) # Indending new lines
+        cprint(msg, **kwargs)
+
+    def INFO(msg, label='[INFO] ', **kwargs):
+        msg = ('\n'+ ' ' * len(label)).join( (label+msg).split('\n') ) # Indending new lines
+        cprint(msg, **kwargs)
+
 
 
 def standardize_polar_df(df):
@@ -31,23 +50,46 @@ def standardize_polar_df(df):
     #print('Cols', df.columns.values)
     return df
 
-def plot_polar_df(axes, df, ls='-', label=None, c=None, marker=None):
-    axes[0].plot(df['Alpha'], df['Cl'], ls=ls, marker=marker, c=c, label=(label if label is not None else ''))
-    axes[0].plot(df['Alpha'], df['Cd'], ls=ls, marker=marker, c=c, label=None)
+def plot_polar_df(axes, df, ls='-', label=None, c=None, marker=None, lw=1, ms=None, 
+                  CdWithCl=True, plotCm=False,
+                  minMax=False, alpha=0.3
+                  ):
+
+    # --- 
+    if minMax and 'Cl min' in df.keys() and 'Cl max' in df.keys():
+        axes[0].fill_between(df['Alpha'], df['Cl min'], df['Cl max'], alpha=alpha, color=c)
+        axes[1].fill_betweenx(df['Cl'], df['Cd min'], df['Cd max'], alpha=alpha, color=c)
+
+    axes[0].plot(df['Alpha'], df['Cl'], ls=ls, marker=marker, c=c, label=(label if label is not None else ''), lw=lw, ms=ms)
+    if CdWithCl:
+        axes[0].plot(df['Alpha'], df['Cd'], ls=ls, marker=marker, c=c, label=None, lw=lw, ms=ms)
 #     if sty=='ko' or sty=='kd':
 #     else:
 #         axes[0].plot(df['Alpha'], df['Cl'], sty, label='Cl '+ (label if label is not None else ''))
 #         axes[0].plot(df['Alpha'], df['Cd'], sty, label='Cd '+ (label if label is not None else ''))
-    axes[1].plot(df['Cd']   , df['Cl'], ls=ls, marker=marker, c=c, label=label)
+    axes[1].plot(df['Cd']   , df['Cl'], ls=ls, marker=marker, c=c, label=label, lw=lw, ms=ms)
+
+    if plotCm:
+        axes[2].plot(df['Alpha'], df['Cm'], ls=ls, marker=marker, c=c, label=label, lw=lw, ms=ms)
+
+    for ax in axes:
+        ax.tick_params(direction='in', top=True, right=True, labelright=False, labeltop=False, which='both')
+
 
 
 
 
 def plot_polars(polars, verbose=False, 
                 cfd_ls='-', cfd_c='k', cfd_m=None,
+                ylim=None, xlimCd=None, xlimAlpha=None,
+                plotCm=False,
                 ):
-    fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
-    fig.subplots_adjust(left=0.08, right=0.99, top=0.94, bottom=0.11, hspace=0.20, wspace=0.20)
+    if plotCm:
+        fig,axes = plt.subplots(1, 3, sharey=False, figsize=(12.8,5.8))
+        fig.subplots_adjust(left=0.08, right=0.99, top=0.94, bottom=0.11, hspace=0.20, wspace=0.20)
+    else:
+        fig,axes = plt.subplots(1, 2, sharey=False, figsize=(12.8,5.8))
+        fig.subplots_adjust(left=0.08, right=0.99, top=0.94, bottom=0.11, hspace=0.20, wspace=0.20)
 
     if polars is not None:
         cfd_done=False
@@ -102,7 +144,7 @@ def plot_polars(polars, verbose=False,
 
             if verbose:
                 print(f'[INFO] Plot Polar n=len(pol), label={k:15s}, ls={ls}, m={m} c={c}')
-            plot_polar_df(axes, df2, marker=m, label=k, c=c, ls=ls)
+            plot_polar_df(axes, df2, marker=m, label=k, c=c, ls=ls, plotCm=plotCm)
 
 
     axes[0].set_xlabel('Angle of Attack (deg)')
@@ -115,10 +157,20 @@ def plot_polars(polars, verbose=False,
     axes[0].grid(True)
     axes[1].grid(True)
 
-    ymin, ymax = axes[0].get_ylim()
-    axes[0].set_ylim(*np.clip(axes[0].get_ylim(), -3, 3))
+    if ylim is not None:
+        axes[0].set_ylim(ylim)
+    else:
+        axes[0].set_ylim(*np.clip(axes[0].get_ylim(), -3, 3))
     axes[1].set_ylim(*np.clip(axes[1].get_ylim(), -3, 3))
     axes[1].set_xlim(*np.clip(axes[1].get_xlim(), 0, 3))
+    if xlimAlpha is not None:
+        axes[0].set_xlim(xlimAlpha)
+    if xlimCd is not None:
+        axes[1].set_xlim(xlimCd)
+    if plotCm:
+        if xlimAlpha is not None:
+            axes[2].set_xlim(xlimAlpha)
+
 
     return fig
 
@@ -186,7 +238,9 @@ def input_files_from_patterns(patterns):
 
 def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, span=None, verbose=False, polar_out=None, 
                   use_ss=False,
-                  polars=None, plot=False, cfd_m = '', cfd_ls='-', cfd_c='k'):
+                  polars=None, plot=False, cfd_m = '', cfd_ls='-', cfd_c='k',
+                  last_portion=0.3
+                  ):
     """ 
     INPUTS:
      - input_pattern: either:
@@ -213,6 +267,7 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, span=None, 
             raise Exception('Provide yaml file if input are force files.')
         yml = NALUInputFile(yaml_file, chord=chord, span=span)
         Fref = yml.reference_force
+        Mref = Fref * chord
 
     # --- Loop on files (csv or yaml)
     #d_sorted = dict(sorted(d.items(), key=lambda x: x[0]))
@@ -224,11 +279,12 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, span=None, 
             print(f' {input_file} ')
         try:
             if input_is_csv:
-                df = read_forces_csv(input_file, verbose=verbose, Fref=Fref)
+                df = read_forces_csv(input_file, verbose=verbose, Fref=Fref, Mref=Mref)
             else:
                 df, Fref, yml, csv_files = read_forces_yaml(input_file, chord=chord, span=span, dimensionless=True, verbose=verbose)
+                Mref = Fref * chord
         except Exception as e:
-            print(f"[FAIL] Error reading {input_file}: {e}")
+            FAIL(f"Error reading {input_file}: {e}")
             continue
         dfs.append(df)
         d = {'Alpha': aoa, 'Nt':len(df)}
@@ -268,13 +324,14 @@ def polar_postpro(input_pattern, yaml_file=None, tmin=None, chord=1, span=None, 
                     df = df[df['Time']>t_onset_default]
             period = ss['period']
         else:
-            n = int(0.3*len(df))
+            n = int(last_portion*len(df))
             df = df.iloc[-n:]
+
         results.append({'Alpha': ss['Alpha'], 
-                        'Cl': df['Cy'].mean(), 'Cd': df['Cx'].mean(), 
-                        'Cl_std': df['Cy'].std(), 'Cd_std': df['Cx'].std(), 
-                        'Cl_min': df['Cy'].min(), 'Cd_min': df['Cx'].min(), 
-                        'Cl_max': df['Cy'].max(), 'Cd_max': df['Cx'].max(), 
+                        'Cl': df['Cy'].mean(), 'Cd': df['Cx'].mean(), 'Cm': df['Cm'].mean(),
+                        'Cl_std': df['Cy'].std(), 'Cd_std': df['Cx'].std(), 'Cm_std': df['Cm'].std(),
+                        'Cl_min': df['Cy'].min(), 'Cd_min': df['Cx'].min(), 'Cm_min': df['Cm'].min(),
+                        'Cl_max': df['Cy'].max(), 'Cd_max': df['Cx'].max(), 'Cm_max': df['Cm'].max(), 
                         'N': len(df),
                         'T': period
                         })
@@ -363,12 +420,14 @@ def nalu_forces(input_files='forces.csv', tmin=None, tmax=None,
                         if any(x is None for x in [chord, rho, nu, U0, span] ):
                             raise ValueError('For dimensionless forces, U0, rho and nu must be provided.')
                         Fref = 1/2 * rho * chord * span * U0**2 
+                    Mref = Fref * chord
 
-                dft = read_forces_csv(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref)
+                dft = read_forces_csv(input_file, tmin=tmin, tmax=tmax, verbose=verbose, Fref=Fref, Mref=Mref)
                 sInfo =  'YML  : {}\n'.format(yaml_file)
                 sInfo += 'CSV  : {}'.format(input_file)
             else:
                 dft, Fref, yml, csv_files = read_forces_yaml(input_file, chord=chord, span=span, dimensionless=dimensionless, verbose=verbose, tmin=tmin, tmax=tmax)
+                Mref = Fref * chord
                 sInfo  = 'YML  : {}\n'.format(input_file)
                 sInfo += 'CSV  : {}'.format(csv_files)
 

@@ -26,8 +26,14 @@ def find_pairs(pattern="*forces*.csv", verbose=False):
 
 
 def combine_files(f1, f2, fout):
-    df1 = pd.read_csv(f1, delim_whitespace=True)
-    df2 = pd.read_csv(f2, delim_whitespace=True)
+    if os.path.exists(f1) and os.path.exists(f2):
+        try:
+            df1 = pd.read_csv(f1, sep=r"\s+")
+            df2 = pd.read_csv(f2, sep=r"\s+")
+        except:
+            # Old Pandas
+            df1 = pd.read_csv(f1, delim_whitespace=True)
+            df2 = pd.read_csv(f2, delim_whitespace=True)
 
     if not df1.columns.equals(df2.columns):
         raise ValueError(f"Column mismatch between {f1} and {f2}")

@@ -41,6 +41,7 @@ def nalu_aseq(input_file, aseq=None,
             aseq = np.arange(aseq[0], aseq[1]+aseq[2]/2, aseq[2])
         else:
             pass
+    aseq = np.asarray(aseq)
     myprint('AoA sequence', aseq)
 
 

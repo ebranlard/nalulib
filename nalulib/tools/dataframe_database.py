@@ -182,6 +182,8 @@ class DataFrameDatabase:
         if key not in self.configs.columns:
             raise KeyError(f"Key '{key}' not found in configs.")
         values = self.configs[key].values
+        if len(values)==0:
+            raise Exception(f'No values for key {key}, len of db is {len(self)}')
         i = np.argmin(abs(values-value))
         val = values[i]
         #print('Value', value, 'closest', val)
