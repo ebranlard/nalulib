@@ -50,6 +50,7 @@ from nalulib.curves import contour_remove_duplicates
 from nalulib.curves import find_closest
 from nalulib.curves import opposite_contour
 from nalulib.curves import reloop_contour
+from nalulib.curves import curve_deltas
 
 
 class StandardizedAirfoilShape():
@@ -187,6 +188,10 @@ class StandardizedAirfoilShape():
         self._xl,  self._yl  = self._x[self._ILower], self._y[self._ILower]
         self._xTE, self._yTE = self._x[self._ITE]   , self._y[self._ITE]
         self._xLE, self._yLE = self._x[self._iLE]   , self._y[self._iLE]
+        self._xul = np.concatenate([self._xu, self._xl[1:]])
+        self._yul = np.concatenate([self._yu, self._yl[1:]])
+
+
 
     def camberline(self, n=None):
         """Compute the camber line coordinates for this airfoil."""
@@ -194,13 +199,23 @@ class StandardizedAirfoilShape():
         return x0, y0
 
 
-    def resample_te(self, n_te=None, inplace=False):
+    def resample_te(self, n_te=None, inplace=False, method_te='equi_n'):
         self._split_surfaces()
-        if n_te is not None:
+        if method_te == 'equi_n':
+            if n_te is not None:
+                interp_te = lambda x_, y_ : curve_interp(x_, y_, n=n_te)
+            else:
+                raise NotImplementedError("n_te should be specified for resampling TE.")
+
+        elif method_te == 'min_dist':
+            ds_min = curve_deltas(self._xul, self._yul).min()
+            l_te = curve_coord(self._xTE[:-1], self._yTE[:-1])[-1]
+            if ds_min > l_te:
+                print("[WARN] ds_min ({}) is greater than the length of the trailing edge ({}).".format(ds_min, l_te))
+            n_te = max(int(np.ceil(l_te/ds_min)), 2)
             interp_te = lambda x_, y_ : curve_interp(x_, y_, n=n_te)
-        else:
-            raise NotImplementedError("n_te should be specified for resampling TE.")
         x_new, y_new = resample_airfoil_ul(self._x, self._y, self._IUpper, self._ILower, self._ITE, interp_ul=None, interp_te=interp_te)
+
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_te')
 
     def resample_spline(self, n_surf=1000, inplace=False, kind='cubic'):
@@ -225,6 +240,11 @@ class StandardizedAirfoilShape():
         # plt.show()
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_spline', TE_type=self._TE_TYPE) # Preserve TE type
 
+    def resample_linear(self, n_surf=80, inplace=False):
+        self._split_surfaces()
+        x_new, y_new = resample_airfoil_linear(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf)
+        return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_linear')
+
     def resample_cosine(self, n_surf=80, inplace=False):
         self._split_surfaces()
         x_new, y_new = resample_airfoil_cosine(self._x, self._y, self._IUpper, self._ILower, self._ITE, n_surf=n_surf)
@@ -239,11 +259,13 @@ class StandardizedAirfoilShape():
         x_new, y_new = resample_airfoil_refine(self._x, self._y, self._IUpper, self._ILower, self._ITE, factor_surf=factor_surf, factor_te=factor_te)
         return self.return_new_or_copy(x_new, y_new, inplace=inplace, label='_refine')
 
-    def resample(self, method='', inplace=False, n=None, n_te=None, verbose=False, a_hyp=2.5, **kwargs):
+    def resample(self, method='auto', inplace=False, method_te=None, n=None, n_te=None, verbose=False, a_hyp=2.5, **kwargs):
         """
         for most methods:
              -n becomes n per surface
         """
+        if n_te is None and method_te is None:
+            method_te = 'equi_n' # Backward compatibility, if n_te is not specified, use equi_n for TE resampling
 
         arf = self
         # --- Auto method
@@ -256,13 +278,11 @@ class StandardizedAirfoilShape():
         if verbose:
             print('Resampling airfoil with method: {}, n: {}, n_te: {}'.format(method, n, n_te))
 
-        if n_te is not None:
-            arf = arf.resample_te(n_te=n_te, inplace=inplace)
-            #arf.plot(title='Resampled TE')
-
         if method == 'equi_n':
             # TODO CUBIC OR LINEAR
             arf = arf.resample_spline(n_surf=n, inplace=inplace, kind='linear')
+        elif method == 'linear':
+            arf = arf.resample_linear(n_surf=n, inplace=inplace)
         elif method == 'cosine':
             arf = arf.resample_cosine(n_surf=n, inplace=inplace)
         elif method == 'hyperbolic':
@@ -273,6 +293,12 @@ class StandardizedAirfoilShape():
             pass
         else:
             raise ValueError("Unknown resampling method: {}".format(method))
+
+        if method_te is not None:
+            arf = arf.resample_te(n_te=n_te, inplace=inplace, method_te=method_te)
+            #arf.plot(title='Resampled TE')
+
+
         return arf
 
 

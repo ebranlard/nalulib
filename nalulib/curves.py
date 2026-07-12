@@ -36,6 +36,13 @@ def curve_coord(x=None, y=None, line=None, normalized=False):
         s = s/s[-1]  # Normalizing to [0,1]
     return s
 
+def curve_deltas(x=None, y=None, line=None):
+    """ return deltas along a curve """
+    s = curve_coord(x=x, y=y, line=line)
+    ds = np.diff(s)
+    return ds
+
+
 
 def curve_extract(line, spacing, offset=None):
     """ Extract points at equidistant space along a curve
@@ -51,10 +58,13 @@ def curve_extract(line, spacing, offset=None):
     # New (equidistant) curvilinear coordinate
     sExtract=np.arange(offset,s[-1],spacing)
     # Interpolating based on new curvilinear coordinate
-    xx=np.interp(sExtract,s,x);
-    yy=np.interp(sExtract,s,y);
-    return np.array([xx,yy]).T
+    xx=np.interp(sExtract,s,x)
+    yy=np.interp(sExtract,s,y)
+    return np.array([xx,yy])
 
+# --------------------------------------------------------------------------------
+# --- Curve Interp
+# --------------------------------------------------------------------------------
 def curve_interp_s(x, y, s_new, normalized=False):
     s_old = curve_coord(x, y, normalized=normalized)
     xx = np.interp(s_new, s_old, x)

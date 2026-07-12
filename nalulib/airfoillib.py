@@ -707,6 +707,16 @@ def detect_airfoil_features(coords):
 # --------------------------------------------------------------------------------}
 # --- Airfoil Remeshing
 # --------------------------------------------------------------------------------{
+def linear_spacing_s(n, reverse=False):
+    """
+    Returns n indices spaced according to linear spacing (0 at LE, 1 at TE).
+    If reverse=True, flips the order.
+    """
+    s = np.linspace(0, 1, n)
+    if reverse:
+        s = s[::-1]
+    return s
+
 def cosine_spacing_s(n, reverse=False):
     """
     Returns n indices spaced according to cosine spacing (0 at LE, 1 at TE).
@@ -849,6 +859,17 @@ def resample_airfoil_refine(x, y, IUpper, ILower, ITE, factor_surf=2, factor_te=
     x_new, y_new = resample_airfoil_ul(x, y, IUpper, ILower, ITE, interp_ul=interp_ul, interp_te=interp_te)
     return x_new, y_new
 
+
+def resample_airfoil_linear(x, y, IUpper, ILower, ITE, n_surf=80, interp_te=None):
+    """
+    Resample upper, lower, and TE surfaces with linear and constant spacing.
+    Returns new x, y arrays (closed, counterclockwise).
+    """
+    interp_upper = lambda x_, y_: curve_interp_s(x_, y_, s_new=linear_spacing_s(n_surf), normalized=True)
+    interp_lower = interp_upper
+    x_new, y_new = resample_airfoil(x, y, IUpper, ILower, ITE, interp_upper, interp_lower, interp_te)  
+
+    return x_new, y_new
 
 def resample_airfoil_hyperbolic(x, y, IUpper, ILower, ITE, n_surf=80, a_hyp=2.5, interp_te=None):
     """

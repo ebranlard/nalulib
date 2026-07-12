@@ -16,11 +16,14 @@ MARKERS_CONV={'o':'dot', 'x':'cross', '+':'+', 'd':'fhd', '.':'braille', 's':'sd
 def get_plotext_default_size():
     try:
         size = os.get_terminal_size()
+        width = size.columns - 10
+        height = int(size.lines * 0.7)
+        height100 = int(size.lines)
     except OSError:
         size = (80, 24)  # Default size if terminal size cannot be determined
-    width = size.columns - 10
-    height = int(size.lines * 0.7)
-    height100 = int(size.lines)
+        width = size[0] - 10
+        height = int(size[1] * 0.7)
+        height100 = size[1]
     return width, height, height100
 
 
