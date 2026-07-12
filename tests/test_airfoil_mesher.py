@@ -39,14 +39,14 @@ class TestAirfoilMesher(unittest.TestCase):
         """  """
         # --- Blunt TE: two distinct TE points at x=1 -> blunt
         fullpath = os.path.join(scriptDir, '../data/airfoils/tests/fb90_coords.csv')
-        n = 10
-        plot=False
+        n = 50
+        plot=True
         arf = mesh_airfoil(fullpath, respline=False, n=n, method='hyperbolic', method_te='min_dist',  check=False, verbose=False, plot=plot)
         # ensure internal split computed
         arf._split_surfaces()
         self.assertEqual(len(arf._IUpper), n)
         self.assertEqual(len(arf._ILower), n)
-        self.assertEqual(len(arf._ITE) - 1, 5)
+        self.assertEqual(len(arf._ITE) - 1, 27)
         self.assertEqual(arf._TE_TYPE, 'blunt')
 
 

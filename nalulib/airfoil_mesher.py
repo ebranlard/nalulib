@@ -44,6 +44,7 @@ def mesh_airfoil(airfoil_coords_wrap, method='auto', n=100, n_te=None, check=Tru
             arf.plot(title='Resplined')
         if verbose:
             print(arf)
+        print('[INFO] Done resplining')
     else:
         print('[INFO] No respline before meshing, using original coordinates.')
 

@@ -215,7 +215,7 @@ class StandardizedAirfoilShape():
             l_te = curve_coord(self._xTE[:-1], self._yTE[:-1])[-1]
             if ds_min > l_te:
                 print("[WARN] ds_min ({}) is greater than the length of the trailing edge ({}).".format(ds_min, l_te))
-            n_te = max(int(np.ceil(l_te/ds_min)), 2)
+            n_te = max(int(np.ceil(l_te/ds_min)), 10) # 
             interp_te = lambda x_, y_ : curve_interp(x_, y_, n=n_te)
         x_new, y_new = resample_airfoil_ul(self._x, self._y, self._IUpper, self._ILower, self._ITE, interp_ul=None, interp_te=interp_te)
 
@@ -299,7 +299,9 @@ class StandardizedAirfoilShape():
             raise ValueError("Unknown resampling method: {}".format(method))
 
         if method_te is not None:
+            print('>>>>>>>>>> RESAMPLE_ TE, method_te: {}, n_te: {}'.format(method_te, n_te))
             arf = arf.resample_te(n_te=n_te, inplace=inplace, method_te=method_te)
+            print('>>> Done resampling TE')
             #arf.plot(title='Resampled TE')
 
 
@@ -324,10 +326,13 @@ class StandardizedAirfoilShape():
         s+='| * TE_type    : {}\n'.format(self._TE_TYPE)
         s+='| * chord      : {}\n'.format(self.chord)
         s+='| * t_rel_max  : {:.6f}\n'.format(self.t_rel_max)
+        print('>>> Thickiness')
         s+='| * thickness_max            : {:.6f}\n'.format(self.thickness_max)
         s+='| * thickness_max_from_camber: {:.6f}\n'.format(self.thickness_max_from_camber)
+        print('>>> TE angle')
         s+='| * trailing_edge_angle      : {:.6f}\n'.format(self.trailing_edge_angle)
         # Original attributes
+        print('>>> Properties')
         s+='|Properties of the original airfoil (before standardization):\n'
         s+='| > (original) number of points : {:4d}\n'.format(len(self._ori_xy))
         s+='| > (original) standardized     : {}\n'.format(self._ori_standardized)
@@ -395,6 +400,7 @@ class StandardizedAirfoilShape():
         return plot_standardized(self._x, self._y, TE_type=self._TE_TYPE,**kwargs)
 
     def tri_plot(self, axes=None, legend=True, title='', n_target=30, **kwargs):
+        self._split_surfaces()
 
         # --- zoom helper ---
         def zoom_x(ax, x0, dx):
@@ -411,9 +417,9 @@ class StandardizedAirfoilShape():
             fig.subplots_adjust(left=0.04, right=0.99, top=0.95, bottom=0.07, hspace=0.20, wspace=0.20)
         ax1, ax2, ax3 = axes
         # 
-        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax1, title=None , legend=False, orient=False, **kwargs)
-        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax2, title=title, legend=legend,              **kwargs)
-        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax3, title=None , legend=False, orient=False, **kwargs)
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax1, title=None , legend=False, orient=False, SS=self._SS, **kwargs)
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax2, title=title, legend=legend,              SS=self._SS, **kwargs)
+        plot_standardized(self._x, self._y, TE_type=self._TE_TYPE, ax=ax3, title=None , legend=False, orient=False, SS=self._SS, **kwargs)
         ax1.set_xlabel('')
         ax1.set_ylabel('')
         ax3.set_xlabel('')
@@ -422,12 +428,18 @@ class StandardizedAirfoilShape():
         # --- left and right zooms
         dx=0.15
         nn=1000
-        while nn>n_target:
+        nitMax = 100
+        it = 0
+        while nn>n_target and it < nitMax:
+            it += 1
             dx=dx/2
             nn = zoom_x(ax1, x0=dx/2, dx=dx)
         dx=0.15
         nn=1000
-        while nn>n_target:
+        it = 0
+        #n_target = max(n_target, len(self._ITE))
+        while nn>n_target and it < nitMax:
+            it += 1
             dx=dx/2
             nn = zoom_x(ax3, x0=1-dx/2, dx=dx)
 
