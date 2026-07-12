@@ -23,26 +23,31 @@ class TestStandardizedAirfoilShape(unittest.TestCase):
         #test('../data/airfoils/ffa_w3_211_coords.cs', 0.21, 15.91)
 
 
-    def test_problematic_airfoils(self):
+    def test_airfoils_blunt_te(self):
         # Test TE types and indices 
         info = []
-        info += [('../data/airfoils/tests/snl-ffa-w3-560fb_coords.csv', 'blunt', [397,398,0])] # Blunt
-        info += [('../data/airfoils/tests/snl-ffa-w3-480fb_coords.csv', 'blunt', [397,398,0])] # Blunt
-        info += [('../data/airfoils/tests/fb60_coords.csv', 'blunt', [198,199,0])] # Blunt
-        info += [('../data/airfoils/tests/fb90_coords.csv', 'blunt', [397,398,0])] # Blunt
-        info += [('../data/airfoils/tests/fb80_coords.csv', 'blunt', [198,199,0])] # Blunt
+        info += [('../data/airfoils/ffa_w3_211_coords.csv', 'blunt', [199,200,201,0])] # Blunt
+        info += [('../data/airfoils/tests/ffa-w3-211_coords.csv', 'blunt', [159,160,0])] # Blunt
+        info += [('../data/airfoils/tests/ffa-w3-241_coords.csv', 'blunt', [78,79,0])] # Blunt
+        info += [('../data/airfoils/tests/ffa-w3-301_coords.csv', 'blunt', [78,79,0])] # Blunt
+        info += [('../data/airfoils/tests/ffa-w3-360_coords.csv', 'blunt', [78,79,0])] # Blunt
+        info += [('../data/airfoils/tests/snl-ffa-w3-560fb_coords.csv', 'blunt', [398,399,0])] # Blunt
+        info += [('../data/airfoils/tests/snl-ffa-w3-480fb_coords.csv', 'blunt', [398,399,0])] # Blunt
+        info += [('../data/airfoils/tests/fb60_coords.csv', 'blunt', [199,200,0])] # Blunt
+        info += [('../data/airfoils/tests/fb90_coords.csv', 'blunt', [398,399,0])] # Blunt
+        info += [('../data/airfoils/tests/fb80_coords.csv', 'blunt', [199,200,0])] # Blunt
 
         info += [('../data/airfoils/tests/naca6412.dat', 'blunt', [60,61, 62, 0])] # Blunt inclined like this: / 
         info += [('../data/airfoils/blunt_not_straight.csv'         , 'blunt' , np.concatenate((np.arange(499,524), [0])))] # Inclined like this: /
         info += [('../data/airfoils/tests/du91-w2-225_nalu_l40.csv' , 'sharp' , np.array([40  , 0]))] # Sharp blunt like this: =>
 
         info += [('../data/airfoils/tests/ag04.dat', 'blunt', [179, 180, 0])] #  TE is like this: \
-        info += [('../data/airfoils/tests/sd7034.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
+        info += [('../data/airfoils/tests/sd7034.dat', 'sharp', [61,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
         info += [('../data/airfoils/tests/ste87151.dat', 'sharp', [60,0])] #  TE is like this X  (points are buggy, but open_contour takes care of it)
 
-        ##info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
-        ##info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
-        ##info += [('../data/airfoils/tests/goe795sm.dat', 'sharp', [90, 0])]
+        #info += [('../data/airfoils/tests/s1221.dat', 'sharp', [90, 0])]
+        #info += [('../data/airfoils/tests/goe187.dat', 'sharp', [90, 0])]
+        #info += [('../data/airfoils/tests/goe795sm.dat', 'sharp', [90, 0])]
 
         for fpath, TE_type, ITE in info:
             fullpath = os.path.join(scriptDir, fpath)
@@ -143,9 +148,9 @@ class TestAirfoilShape(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    TestAirfoilShape().test_resample_blunt()
-    #TestAirfoilShape().test_problematic_airfoils()
-    #TestAirfoilShape().test_properties()
-    #unittest.main()
+    #TestStandardizedAirfoilShape().test_resample_blunt()
+    #TestStandardizedAirfoilShape().test_airfoils_blunt_te()
+    #TestStandardizedAirfoilShape().test_properties()
+    unittest.main()
     #import matplotlib.pyplot as plt
-    #plt.show()
+    plt.show()

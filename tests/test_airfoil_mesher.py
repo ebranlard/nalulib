@@ -46,7 +46,7 @@ class TestAirfoilMesher(unittest.TestCase):
         arf._split_surfaces()
         self.assertEqual(len(arf._IUpper), n)
         self.assertEqual(len(arf._ILower), n)
-        self.assertEqual(len(arf._ITE) - 1, 6)
+        self.assertEqual(len(arf._ITE) - 1, 5)
         self.assertEqual(arf._TE_TYPE, 'blunt')
 
 
@@ -71,6 +71,6 @@ class TestAirfoilMesher(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    #TestAirfoilMesher().test_mesh_airfoil_blunt_temindist()
+    TestAirfoilMesher().test_mesh_airfoil_blunt_temindist()
     #unittest.main()
     plt.show()

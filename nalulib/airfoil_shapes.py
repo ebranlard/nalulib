@@ -71,13 +71,15 @@ class StandardizedAirfoilShape():
             x, y, _ = read_airfoil(filename, format=format)
         if x is None or y is None:
             raise ValueError("x and y coordinates must be provided or a filename must be specified.")
+        # MISC Init
+        self._TE_TYPE = None
 
         # Store original info
+        self._ori_xy = np.column_stack((x, y))
         self._ori_standardized = airfoil_is_standardized(x, y, raiseError=False)
         self._ori_start_point = (x[0], y[0])
         self._ori_orientation = contour_orientation(x, y)
         self._ori_closed = contour_is_closed(x, y, reltol=reltol)
-        self._ori_xy = np.column_stack((x, y))
 
         # Normalized airfoil coordinates
         x, y = standardize_airfoil_coords(x, y, reltol=reltol, verbose=verbose)
@@ -86,6 +88,7 @@ class StandardizedAirfoilShape():
         self._y = y
         self.reltol = reltol
         self.verbose=verbose
+        #import pdb; pdb.set_trace()
 
         # Possibility to output in different conventions
         self.output_closed = True
@@ -264,8 +267,9 @@ class StandardizedAirfoilShape():
         for most methods:
              -n becomes n per surface
         """
-        if n_te is None and method_te is None:
-            method_te = 'equi_n' # Backward compatibility, if n_te is not specified, use equi_n for TE resampling
+        if method_te is None:
+            if n_te is not None:
+                method_te = 'equi_n' # Backward compatibility, if n_te is not specified, use equi_n for TE resampling
 
         arf = self
         # --- Auto method

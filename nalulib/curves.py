@@ -233,7 +233,7 @@ def insert_uniformly(s, s_old, tol=1e-10, thresh=0.2):
 def contour_is_closed(x, y, reltol=_DEFAULT_REL_TOL):
     """ Return true if contour is closed """
     l = contour_length_scale(x, y)
-    return np.abs(x[0]-x[-1])<l*reltol or np.abs(y[0]-y[-1])<l*reltol
+    return np.abs(x[0]-x[-1])<l*reltol and np.abs(y[0]-y[-1])<l*reltol
 
 def contour_is_clockwise(coords, y=None):
     if y is None:

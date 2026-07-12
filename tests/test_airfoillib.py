@@ -121,7 +121,7 @@ class TestAirfoilLib(unittest.TestCase):
             test('naca0012', expected=[300, 0], method=method, sharp=True)
             test(os.path.join(scriptDir, '../data/airfoils/S809.csv'), expected=[65, 0], method=method)
             test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.pwise'), expected=[199, 200, 201, 0], method=method)
-            test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.csv'), expected=[199, 200, 0], method=method)
+            test(os.path.join(scriptDir, '../data/airfoils/ffa_w3_211_coords.csv'), expected=[199, 200, 201, 0], method=method)
 
         method = 'angle'
         test(os.path.join(scriptDir, '../data/airfoils/blunt_not_straight.csv'), expected=np.concatenate((np.arange(499,524), [0])), method=method)

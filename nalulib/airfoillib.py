@@ -1137,7 +1137,7 @@ def plot_airfoil(x, y, ax=None, label=None, title='', sty='k.-', orient=True, ve
 # ---------------------------------------------------------------------------
 def load_airfoil_coords(filename):
     coords = np.loadtxt(filename)
-    coords = coords[:, :2] # Keep only x and y coordinates
+    coords =coords[:, :2] # Keep only x and y coordinates
     # Remove duplicates
     _, unique_indices = np.unique(coords, axis=0, return_index=True)
     if len(unique_indices) < coords.shape[0]:
