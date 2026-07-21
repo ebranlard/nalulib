@@ -70,7 +70,10 @@ def plot_polar_df(axes, df, ls='-', label=None, c=None, marker=None, lw=1, ms=No
     axes[1].plot(df['Cd']   , df['Cl'], ls=ls, marker=marker, c=c, label=label, lw=lw, ms=ms)
 
     if plotCm:
-        axes[2].plot(df['Alpha'], df['Cm'], ls=ls, marker=marker, c=c, label=label, lw=lw, ms=ms)
+        if 'Cm' not in df:
+            print('[WARN] Cm not in df')
+        else:
+            axes[2].plot(df['Alpha'], df['Cm'], ls=ls, marker=marker, c=c, label=label, lw=lw, ms=ms)
 
     for ax in axes:
         ax.tick_params(direction='in', top=True, right=True, labelright=False, labeltop=False, which='both')
@@ -159,9 +162,10 @@ def plot_polars(polars, verbose=False,
 
     if ylim is not None:
         axes[0].set_ylim(ylim)
+        axes[1].set_ylim(ylim)
     else:
         axes[0].set_ylim(*np.clip(axes[0].get_ylim(), -3, 3))
-    axes[1].set_ylim(*np.clip(axes[1].get_ylim(), -3, 3))
+        axes[1].set_ylim(*np.clip(axes[1].get_ylim(), -3, 3))
     axes[1].set_xlim(*np.clip(axes[1].get_xlim(), 0, 3))
     if xlimAlpha is not None:
         axes[0].set_xlim(xlimAlpha)
